@@ -1,7 +1,6 @@
 import * as monaco from 'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/+esm';
-import { parse } from './parser/gramatica.js';
-import Tokenizer from './parser/visitor/Tokenizador.js';
-import { ErrorReglas } from './parser/error.js';
+import { parse } from './src/grammar/gramatica.js';
+import { ErrorReglas } from './src/grammar/error.js';
 import generateParser from './src/parser/utils.js';
 
 export let ids = [];
@@ -37,10 +36,8 @@ const analizar = () => {
         if (errores.length > 0) {
             salida.setValue(`Error: ${errores[0].message}`);
             return;
-        } else {
-           
-            const tokenizer = new Tokenizer();
-            const fileContents = tokenizer.generateParser(cst);
+        } else {           
+            const fileContents = generateParser(cst);
             const blob = new Blob([fileContents], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const button = document.getElementById('ButtomDownload');
