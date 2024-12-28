@@ -55,7 +55,7 @@ expresiones
     return new n.String(val.replace(/['"]/g, ''), isCase);
   }
   / "(" _ opciones:opciones _ ")"
-  / exprs:corchetes isCase:"i"?{
+  / exprs:clase isCase:"i"?{
     return new n.Clase(exprs, isCase);
 
   }
@@ -80,33 +80,18 @@ conteo = "|" _ (numero / id:identificador) _ "|"
 // delimitador =  "," _ expresion
 
 // Regla principal que analiza corchetes con contenido
-corchetes
-    = "[" contenido:(rango / contenido)+ "]" {
-        return contenido;
-    }
+clase
+  = "[" @contenidoClase+ "]"
 
-// Regla para validar un rango como [A-Z]
-rango
-    = inicio:$caracter "-" fin:$caracter {
-        return new n.Range(inicio, fin);
-    }
+contenidoClase
+  = bottom:$caracter "-" top:$caracter {
+    return new n.Range(bottom, top);
+  }
+  / $caracter
 
-// Regla para caracteres individuales
 caracter
-    = [a-zA-Z0-9_ ] 
-
-// Coincide con cualquier contenido que no incluya "]"
-contenido
-    = contenido: (corchete / @$texto){
-        return new n.literalRango(contenido);
-    }
-
-corchete
-    = "[" contenido "]"
-
-texto
-    = "\\" escape
-    /[^\[\]]
+  = [^\[\]\\]
+  / "\\" .
 
 literales
   = '"' @stringDobleComilla* '"'
