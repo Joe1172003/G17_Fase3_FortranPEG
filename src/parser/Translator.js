@@ -77,15 +77,53 @@ export default class FortranTranslator{
      */
 
     visitExpression(node) {
+        let number1, number2 = null;
         const condition = node.expr.accept(this);
         const negation = node.label === '!' ? '' : '.not.';
         if(node.qty.length > 1){
             node.qty = node.qty.replace(/\|/g, '')
-            if(node.qty.split(',').length == 2){
-                //delimiter ['2..5']
+
+            if (!node.qty.includes(",") && !node.qty.includes("..")) {
+                let tmp = (!isNaN(parseInt(node.qty))) ? parseInt(node.qty) : node.qty;
+                return `
+                    do while(cursor <= len(input))
+                        if(.not. (${condition})) then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    end do
+                    if(.not. (j == ${tmp})) then
+                        cycle
+                    end if
+                `;
+            }else if(node.qty.split(',').length == 2){
+                const parts = node.qty.split(',');
+                const nums = parts[0].split('..');
+                number1, number2 = null;
+            
+                if (!isNaN(parseInt(nums[0]))) number1 = parseInt(nums[0]);
+                if (!isNaN(parseInt(nums[1]))) number2 = parseInt(nums[1]);
+
+                if (number1 && number2) {
+                    return `
+                    do while(cursor <= len(input))
+                        if(.not. (${condition})) then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        if ((.not. (input(cursor:cursor) == ${parts[1]})) .and. j > 1) then
+                            exit
+                        end if
+                        j = j + 1
+                    end do
+                    if(.not. (j >= ${number1} .and. j <= ${number2})) then
+                        cycle
+                    end if
+                    `;
+                }
             }else{
-                let number1 = null;
-                let number2 = null;
+                number1, number2 = null;
                 console.log(node.qty.split(',')[0][0]);
                 if(! isNaN(parseInt(node.qty.split(',')[0][0]))){
                     number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
