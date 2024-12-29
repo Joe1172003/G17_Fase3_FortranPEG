@@ -112,10 +112,13 @@ export default class FortranTranslator{
                             cursor = cursor - 1
                             exit
                         end if
-                        if ((.not. (input(cursor:cursor) == ${parts[1]})) .and. j > 1) then
+                        j = j + 1
+                        if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
+                            cursor = cursor + 1
+                            cycle
+                        else
                             exit
                         end if
-                        j = j + 1
                     end do
                     if(.not. (j >= ${number1} .and. j <= ${number2})) then
                         cycle
