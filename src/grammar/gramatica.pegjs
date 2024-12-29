@@ -39,6 +39,7 @@ union
 
 expresion
   = label:$(etiqueta/varios)? _ expr:expresiones _ qty:$([?+*]/conteo)? {
+    console.log(qty)
     return new n.Expression(expr, label, qty);
   }
 
@@ -68,7 +69,7 @@ expresiones
 
 // conteo = "|" parteconteo _ (_ delimitador )? _ "|"
 
-conteo = "|" _ (numero / id:identificador) _ "|"
+conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text()}
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
         / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
@@ -138,3 +139,4 @@ _ = (Comentarios /[ \t\n\r])*
 Comentarios = 
     "//" [^\n]* 
     / "/*" (!"*/" .)* "*/"
+

@@ -49,6 +49,7 @@ contains
         if (str /= input(cursor:cursor + offset)) then
             accept = .false.
             expected = str
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + len(str);
@@ -61,6 +62,7 @@ contains
 
         if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -73,6 +75,7 @@ contains
 
         if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -85,6 +88,7 @@ contains
         if (cursor > len(input)) then
             accept = .false.
             expected = "<ANYTHING>"
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1

@@ -18,6 +18,7 @@ export default class FortranTranslator{
         function peg_${node.id}() result(accept)
             logical :: accept
             integer :: i
+            integer :: j
 
             accept = .false.
             ${node.expr.accept(this)}
@@ -76,37 +77,59 @@ export default class FortranTranslator{
 
     visitExpression(node) {
         const condition = node.expr.accept(this);
-        switch (node.qty) {
-            case '+':
-                return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                do while (.not. cursor > len(input))
-                    if (.not. (${condition})) then
+        const negation = node.label === '!' ? '' : '.not.';
+        if(node.qty.length > 1){
+            node.qty = node.qty.replace(/\|/g, '')
+            if(node.qty.split(',').length == 2){
+                //delimiter ['2..5']
+            }else{
+                let number1 = null;
+                let number2 = null;
+                console.log(node.qty.split(',')[0][0]);
+                if(! isNaN(parseInt(node.qty.split(',')[0][0]))){
+                    number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
+                }
+                console.log(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]);
+                if(! isNaN(parseInt(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]))){
+                    number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
+                }
+                console.log(number1, number2);
+                if(number1 && number2){
+                    return `
+                    do j = 0, ${number1}
+                        if(j == ${number1}) then
+                            do j = ${number1}, ${number2}
+                                if(${condition}) then
+                                    cycle
+                                end if
+                                exit
+                            end do
+                        end if
+                        if(${condition}) then
+                            cycle
+                        end if
                         exit
-                    end if
-                end do
-                `;
-            case '*':
-                return `
-                do while (.not. cursor > len(input))
-                    if (.not. (${condition})) then
-                        exit
-                    end if
-                end do
-                `;
-            case '?':
-                return `
-                if (${condition}) then
-                end if
-                `;
-            default:
-                return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                `;
+                    end do
+                    `
+                }else if(number1){
+                    if(number1 == 0){
+                        node.qty = "*";
+                        return this.getIfQty(node);
+                    }
+                    node.qty = "+";
+                    return this.getIfQty(node);
+                }else if(number2){
+                    node.qty = "?";
+                    return this.getIfQty(node);
+                }else{
+                    node.qty = "*";
+                    return this.getIfQty(node);
+                }
+
+
+            }
+        }else{
+            return this.getIfQty(node);
         }
     }
 
@@ -172,6 +195,47 @@ export default class FortranTranslator{
 
     visitEnd(node) {
         return 'acceptEOF()';
+    }
+
+    getIfQty(node){
+        const condition = node.expr.accept(this);
+        const negation = node.label === '!' ? '' : '.not.';
+        switch (node.qty) {
+            case '+':
+                return `
+                if (${negation} (${condition})) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                do while (.not. cursor > len(input))
+                    if (${negation} (${condition})) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                `;
+            case '*':
+                return `
+                do while (.not. cursor > len(input))
+                    if (${negation} (${condition})) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                `;
+            case '?':
+                return `
+                if (${condition}) then
+                end if
+                `;
+            default:
+                return `
+                if (${negation} (${condition})) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                `;
+        }
     }
 
 }
