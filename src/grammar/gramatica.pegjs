@@ -6,7 +6,7 @@
 }}
 
 gramatica
-  = _ prods:producciones+ _ {
+  = _  block:block_code? prods:producciones+ _ {
     let duplicados = ids.filter((item, index) => ids.indexOf(item) !== index);
     if (duplicados.length > 0) {
         errores.push(new ErrorReglas("Regla duplicada: " + duplicados[0]));
@@ -17,9 +17,18 @@ gramatica
     if (noEncontrados.length > 0) {
         errores.push(new ErrorReglas("Regla no encontrada: " + noEncontrados[0]));
     }
+    
     prods[0].start = true;
+    if(block){
+      prods.push(block)
+    }
+
     return prods;
   }
+
+
+block_code 
+          = "\{" codeBlock:([^}]*) "\}" {return new n.Block(codeBlock.join('')) }
 
 producciones
   = _ id:identificador _ alias:$(literales)? _ "=" _ expr:opciones (_";")? {

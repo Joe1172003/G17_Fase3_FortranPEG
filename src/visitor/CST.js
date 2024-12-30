@@ -1,4 +1,6 @@
 
+// Auto-generated
+
 /**
  * @template T
  * @typedef {import('./Visitor.js').default<T>} Visitor
@@ -7,6 +9,29 @@
  * @typedef {import('./Node.js').default} Node
  */
 
+
+/**
+ * @implements {Node}
+ */
+export class Block {
+    /**
+     *
+     * @param {string} blocCode
+     */
+    constructor(blocCode) {
+        this.blocCode = blocCode;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitBlock(this);
+    }
+}
+    
 
 /**
  * @implements {Node}

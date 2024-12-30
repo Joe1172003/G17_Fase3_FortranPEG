@@ -9,10 +9,17 @@ import * as CST from '../visitor/CST.js';
 
 export default class FortranTranslator{
     /**
+     * @param {CST.Block} node
+     * @this {Visitor}
+     */ 
+    visitBlock(node){
+        return node.blocCode
+    }
+    
+    /**
      * @param {CST.Productions} node
      * @this {Visitor}
      */ 
-
     visitProductions(node){
         return `
         function peg_${node.id}() result(accept)
