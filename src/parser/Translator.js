@@ -98,33 +98,59 @@ export default class FortranTranslator{
                     end if
                 `;
             }else if(node.qty.split(',').length == 2){
-                const parts = node.qty.split(',');
-                const nums = parts[0].split('..');
-                number1, number2 = null;
-            
-                if (!isNaN(parseInt(nums[0]))) number1 = parseInt(nums[0]);
-                if (!isNaN(parseInt(nums[1]))) number2 = parseInt(nums[1]);
 
-                if (number1 && number2) {
+                const parts = node.qty.split(',');
+                if(parts[0].includes('..')){
+                    console.log('=> entrnado a min..max');
+                    const nums = parts[0].split('..');
+                    number1, number2 = null;
+                
+                    if (!isNaN(parseInt(nums[0]))) number1 = parseInt(nums[0]);
+                    if (!isNaN(parseInt(nums[1]))) number2 = parseInt(nums[1]);
+    
+                    if (number1 && number2) {
+                        return `
+                        do while(cursor <= len(input))
+                            if(.not. (${condition})) then
+                                cursor = cursor - 1
+                                exit
+                            end if
+                            j = j + 1
+                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
+                                cursor = cursor + 1
+                                cycle
+                            else
+                                exit
+                            end if
+                        end do
+                        if(.not. (j >= ${number1} .and. j <= ${number2})) then
+                            cycle
+                        end if
+                        `;
+                    }
+                }else{
+                    number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
                     return `
                     do while(cursor <= len(input))
-                        if(.not. (${condition})) then
-                            cursor = cursor - 1
-                            exit
-                        end if
-                        j = j + 1
-                        if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
-                            cursor = cursor + 1
+                            if(.not. (${condition})) then
+                                cursor = cursor - 1
+                                exit
+                            end if
+                            j = j + 1
+                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
+                                cursor = cursor + 1
+                                cycle
+                            else
+                                exit
+                            end if
+                        end do
+
+                        if(.not. (j == ${number1})) then
                             cycle
-                        else
-                            exit
                         end if
-                    end do
-                    if(.not. (j >= ${number1} .and. j <= ${number2})) then
-                        cycle
-                    end if
-                    `;
+                    `
                 }
+               
             }else{
                 number1, number2 = null;
                 console.log(node.qty.split(',')[0][0]);
