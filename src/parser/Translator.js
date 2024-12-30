@@ -20,6 +20,7 @@ export default class FortranTranslator{
             integer :: i
             integer :: j
 
+            j = 0
             accept = .false.
             ${node.expr.accept(this)}
             ${
@@ -96,22 +97,19 @@ export default class FortranTranslator{
                 console.log(number1, number2);
                 if(number1 && number2){
                     return `
-                    do j = 0, ${number1}
-                        if(j == ${number1}) then
-                            do j = ${number1}, ${number2}
-                                if(${condition}) then
-                                    cycle
-                                end if
-                                exit
-                            end do
+                    do while(cursor <= len(input))
+                        if(.not. (${condition})) then
+                            cursor = cursor - 1
+                            exit
                         end if
-                        if(${condition}) then
-                            cycle
-                        end if
-                        exit
+                        j = j + 1
                     end do
+                    if(.not. (j >= ${number1} .and. j <= ${number2})) then
+                        cycle
+                    end if
                     `
                 }else if(number1){
+                   
                     if(number1 == 0){
                         node.qty = "*";
                         return this.getIfQty(node);
