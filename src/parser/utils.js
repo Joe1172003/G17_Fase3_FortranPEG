@@ -1,3 +1,4 @@
+import { Block } from '../visitor/CST.js';
 import FortranTranslator from './Translator.js';
 
 /** @typedef {import('../visitor/CST.js').Productions} Production*/
@@ -5,16 +6,23 @@ import FortranTranslator from './Translator.js';
 /**
  *
  * @param {Production[]} cst
+ * 
  */
 
 export default function generateParser(cst) {
     /** @type(Visitor) */
     const translator = new FortranTranslator();
+        
     return `
 module parser
     implicit none
     integer, private :: cursor
     character(len=:), allocatable, private :: input, expected
+    ${cst.map((rules) => {
+        if(rules instanceof Block){
+           return rules.accept(translator)
+        }
+    }).join('\n')}
 contains
     subroutine parse(str)
         character(len=:), allocatable, intent(in) :: str
@@ -38,7 +46,11 @@ contains
         call exit(1)
     end subroutine error
 
-    ${cst.map((rules) => rules.accept(translator)).join('\n')}
+    ${cst.map((rules) => {
+        if(!(rules instanceof Block)){
+           return rules.accept(translator)
+        }
+    }).join('\n')}
 
     function acceptString(str) result(accept)
         character(len=*) :: str
@@ -49,6 +61,7 @@ contains
         if (str /= input(cursor:cursor + offset)) then
             accept = .false.
             expected = str
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + len(str);
@@ -61,6 +74,7 @@ contains
 
         if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -73,6 +87,7 @@ contains
 
         if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -85,6 +100,7 @@ contains
         if (cursor > len(input)) then
             accept = .false.
             expected = "<ANYTHING>"
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1

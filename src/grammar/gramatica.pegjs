@@ -6,7 +6,7 @@
 }}
 
 gramatica
-  = _ prods:producciones+ _ {
+  = _  block:block_code? prods:producciones+ _ {
     let duplicados = ids.filter((item, index) => ids.indexOf(item) !== index);
     if (duplicados.length > 0) {
         errores.push(new ErrorReglas("Regla duplicada: " + duplicados[0]));
@@ -17,9 +17,18 @@ gramatica
     if (noEncontrados.length > 0) {
         errores.push(new ErrorReglas("Regla no encontrada: " + noEncontrados[0]));
     }
+    
     prods[0].start = true;
+    if(block){
+      prods.push(block)
+    }
+
     return prods;
   }
+
+
+block_code 
+          = "\{" codeBlock:([^}]*) "\}" {return new n.Block(codeBlock.join('')) }
 
 producciones
   = _ id:identificador _ alias:$(literales)? _ "=" _ expr:opciones (_";")? {
@@ -39,6 +48,7 @@ union
 
 expresion
   = label:$(etiqueta/varios)? _ expr:expresiones _ qty:$([?+*]/conteo)? {
+    console.log(qty)
     return new n.Expression(expr, label, qty);
   }
 
@@ -68,7 +78,7 @@ expresiones
 
 // conteo = "|" parteconteo _ (_ delimitador )? _ "|"
 
-conteo = "|" _ (numero / id:identificador) _ "|"
+conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text()}
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
         / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
@@ -138,3 +148,4 @@ _ = (Comentarios /[ \t\n\r])*
 Comentarios = 
     "//" [^\n]* 
     / "/*" (!"*/" .)* "*/"
+

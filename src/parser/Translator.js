@@ -9,16 +9,25 @@ import * as CST from '../visitor/CST.js';
 
 export default class FortranTranslator{
     /**
+     * @param {CST.Block} node
+     * @this {Visitor}
+     */ 
+    visitBlock(node){
+        return node.blocCode
+    }
+    
+    /**
      * @param {CST.Productions} node
      * @this {Visitor}
      */ 
-
     visitProductions(node){
         return `
         function peg_${node.id}() result(accept)
             logical :: accept
             integer :: i
+            integer :: j
 
+            j = 0
             accept = .false.
             ${node.expr.accept(this)}
             ${
@@ -75,38 +84,124 @@ export default class FortranTranslator{
      */
 
     visitExpression(node) {
+        let number1, number2 = null;
         const condition = node.expr.accept(this);
-        switch (node.qty) {
-            case '+':
+        const negation = node.label === '!' ? '' : '.not.';
+        if(node.qty.length > 1){
+            node.qty = node.qty.replace(/\|/g, '')
+
+            if (!node.qty.includes(",") && !node.qty.includes("..")) {
+                let tmp = (!isNaN(parseInt(node.qty))) ? parseInt(node.qty) : node.qty;
                 return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                do while (.not. cursor > len(input))
-                    if (.not. (${condition})) then
-                        exit
+                    do while(cursor <= len(input))
+                        if(.not. (${condition})) then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    end do
+                    if(.not. (j == ${tmp})) then
+                        cycle
                     end if
-                end do
                 `;
-            case '*':
-                return `
-                do while (.not. cursor > len(input))
-                    if (.not. (${condition})) then
-                        exit
+            }else if(node.qty.split(',').length == 2){
+
+                const parts = node.qty.split(',');
+                if(parts[0].includes('..')){
+                    console.log('=> entrnado a min..max');
+                    const nums = parts[0].split('..');
+                    number1, number2 = null;
+                
+                    if (!isNaN(parseInt(nums[0]))) number1 = parseInt(nums[0]);
+                    if (!isNaN(parseInt(nums[1]))) number2 = parseInt(nums[1]);
+    
+                    if (number1 && number2) {
+                        return `
+                        do while(cursor <= len(input))
+                            if(.not. (${condition})) then
+                                cursor = cursor - 1
+                                exit
+                            end if
+                            j = j + 1
+                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
+                                cursor = cursor + 1
+                                cycle
+                            else
+                                exit
+                            end if
+                        end do
+                        if(.not. (j >= ${number1} .and. j <= ${number2})) then
+                            cycle
+                        end if
+                        `;
+                    }
+                }else{
+                    number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
+                    return `
+                    do while(cursor <= len(input))
+                            if(.not. (${condition})) then
+                                cursor = cursor - 1
+                                exit
+                            end if
+                            j = j + 1
+                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
+                                cursor = cursor + 1
+                                cycle
+                            else
+                                exit
+                            end if
+                        end do
+
+                        if(.not. (j == ${number1})) then
+                            cycle
+                        end if
+                    `
+                }
+               
+            }else{
+                number1, number2 = null;
+                console.log(node.qty.split(',')[0][0]);
+                if(! isNaN(parseInt(node.qty.split(',')[0][0]))){
+                    number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
+                }
+                console.log(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]);
+                if(! isNaN(parseInt(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]))){
+                    number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
+                }
+                console.log(number1, number2);
+                if(number1 && number2){
+                    return `
+                    do while(cursor <= len(input))
+                        if(.not. (${condition})) then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    end do
+                    if(.not. (j >= ${number1} .and. j <= ${number2})) then
+                        cycle
                     end if
-                end do
-                `;
-            case '?':
-                return `
-                if (${condition}) then
-                end if
-                `;
-            default:
-                return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                `;
+                    `
+                }else if(number1){
+                   
+                    if(number1 == 0){
+                        node.qty = "*";
+                        return this.getIfQty(node);
+                    }
+                    node.qty = "+";
+                    return this.getIfQty(node);
+                }else if(number2){
+                    node.qty = "?";
+                    return this.getIfQty(node);
+                }else{
+                    node.qty = "*";
+                    return this.getIfQty(node);
+                }
+
+
+            }
+        }else{
+            return this.getIfQty(node);
         }
     }
 
@@ -172,6 +267,47 @@ export default class FortranTranslator{
 
     visitEnd(node) {
         return 'acceptEOF()';
+    }
+
+    getIfQty(node){
+        const condition = node.expr.accept(this);
+        const negation = node.label === '!' ? '' : '.not.';
+        switch (node.qty) {
+            case '+':
+                return `
+                if (${negation} (${condition})) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                do while (.not. cursor > len(input))
+                    if (${negation} (${condition})) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                `;
+            case '*':
+                return `
+                do while (.not. cursor > len(input))
+                    if (${negation} (${condition})) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                `;
+            case '?':
+                return `
+                if (${condition}) then
+                end if
+                `;
+            default:
+                return `
+                if (${negation} (${condition})) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                `;
+        }
     }
 
 }

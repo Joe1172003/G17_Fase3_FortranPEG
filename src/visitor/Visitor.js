@@ -1,9 +1,20 @@
 
+// Auto-generated
+
 /** @typedef {import('./Node.js').default} Node*/
 
 /** @template T */
 export default class Visitor {
     
+        /**
+         * @abstract
+         * @param {Node} node
+         * @returns {T}
+         */
+        visitBlock(node){
+            throw new Error('Implement in subclass');
+        }
+	
         /**
          * @abstract
          * @param {Node} node
