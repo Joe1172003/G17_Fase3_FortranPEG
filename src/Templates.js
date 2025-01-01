@@ -65,6 +65,7 @@ module parser
         offset = len(str) - 1
         if (str /= input(cursor:cursor + offset)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + len(str)
@@ -80,11 +81,13 @@ module parser
         if (isCase) then
             if(.not. (to_lower(input(cursor:cursor)) >= bottom .and. to_lower(input(cursor:cursor)) <= top)) then
                 accept = .false.
+                cursor = cursor + 1
                 return
             end if
         else
             if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
                 accept = .false.
+                cursor = cursor + 1
                 return
             end if
         end if
@@ -101,11 +104,13 @@ module parser
         if (isCase) then
             if(.not. (findloc(set, to_lower(input(cursor:cursor)), 1) > 0)) then
                 accept = .false.
+                cursor = cursor + 1
                 return
             end if
         else
             if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
                 accept = .false.
+                cursor = cursor + 1
                 return
             end if
         end if
@@ -119,6 +124,7 @@ module parser
 
         if (cursor > len(input)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -258,6 +264,25 @@ export const strExpr = (data) => {
                 do while (.not. cursor > len(input))
                     if (.not. ${data.expr}) exit
                 end do
+                ${data.destination} = consumeInput()
+            `;
+        case '*':
+            return `
+                lexemeStart = cursor
+                do while (.not. cursor > len(input))
+                    if (.not. ${data.expr}) then 
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                ${data.destination} = consumeInput()
+            `;
+        case '?':
+            return `
+                lexemeStart = cursor
+                if (.not. ${data.expr}) then
+                    cursor = cursor - 1
+                end if
                 ${data.destination} = consumeInput()
             `;
         case 'min-max':
