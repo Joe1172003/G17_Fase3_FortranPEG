@@ -50,6 +50,7 @@ module parser
         offset = len(str) - 1
         if (str /= input(cursor:cursor + offset)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + len(str)
@@ -63,6 +64,7 @@ module parser
 
         if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -76,6 +78,7 @@ module parser
 
         if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -87,6 +90,7 @@ module parser
 
         if (cursor > len(input)) then
             accept = .false.
+            cursor = cursor + 1
             return
         end if
         cursor = cursor + 1
@@ -219,10 +223,35 @@ export const strExpr = (data) => {
         case '+':
             return `
                 lexemeStart = cursor
-                if (.not. ${data.expr}) cycle
+                if (.not. ${data.expr}) then
+                    cursor = cursor -1
+                    cycle
+                end if
                 do while (.not. cursor > len(input))
-                    if (.not. ${data.expr}) exit
+                    if (.not. ${data.expr}) then
+                        cursor = cursor - 1
+                        exit
+                    end if
                 end do
+                ${data.destination} = consumeInput()
+            `;
+        case '*':
+            return `
+                lexemeStart = cursor
+                do while (.not. cursor > len(input))
+                    if (.not. ${data.expr}) then 
+                        cursor = cursor - 1
+                        exit
+                    end if
+                end do
+                ${data.destination} = consumeInput()
+            `;
+        case '?':
+            return `
+                lexemeStart = cursor
+                if (.not. ${data.expr}) then
+                    cursor = cursor - 1
+                end if
                 ${data.destination} = consumeInput()
             `;
         default:
