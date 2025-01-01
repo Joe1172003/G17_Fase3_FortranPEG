@@ -146,12 +146,13 @@ end module parser
 * @returns
 */
 export const rule = (data) => {
-    console.log(data)
     return`
     function peg_${data.id}() result (res)
         ${data.returnTypes} :: res
         ${data.exprDeclarations.join('\n')}
         integer :: i
+        integer :: j
+        j = 0
 
         savePoint = cursor
         ${data.expr}
@@ -204,6 +205,8 @@ export const union = (data) => `
 *  expr: string;
 *  destination: string
 *  quantifier?: string;
+*  number_1?: number
+*  number_2?: number
 * }} data
 * @returns
 */
@@ -225,10 +228,19 @@ export const strExpr = (data) => {
                 end do
                 ${data.destination} = consumeInput()
             `;
+        case 'min-max':
+            return `
+                lexemeStart = cursor
+                do while (cursor <= len(input))
+                    if (.not. ${data.expr}) exit
+                    j = j + 1
+                end do
+                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
+                ${data.destination} = consumeInput()
+            `
         default:
-            throw new Error(
-                `'${data.quantifier}' quantifier needs implementation`
-            );
+            `'${data.quantifier}'`
+            
     }
 };
 

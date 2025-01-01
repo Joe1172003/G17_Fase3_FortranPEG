@@ -173,19 +173,45 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAnnotated(node){
+
         if(node.qty && typeof node.qty === 'string'){ // +, *, ?
             if(node.expr instanceof CST.Identifier){
                 // TODO: Implement quantifiers (i.e., ?, *, +)
                 // expr_0_0 = peg_fizz()
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
             }
-            return Template.strExpr({
-                quantifier: node.qty,
-                expr: node.expr.accept(this),
-                destination: getExprId(this.currentChoice, this.currentExpr),
-            });
-        } else if(node.qty){ // TODO: Implement repetitions (e.g., |3|, |1..3|, etc...)
-            throw new Error('Repetitions not implemented.');
+            if(node.qty.length > 1){
+                node.qty = node.qty.replace(/\|/g, '')
+                if(node.qty.split(',').length == 2){
+                    
+                }else{
+                    let number1, number2 = null;
+                    if(!isNaN(parseInt(node.qty.split(',')[0][0]))){
+                       number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
+                    }
+                    if(!isNaN(parseInt(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]))){
+                        number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
+                    }
+                    if(number1 && number2){
+                        console.log(number1, number2);
+                        return Template.strExpr({
+                            quantifier: 'min-max',
+                            number_1: number1,
+                            number_2: number2,
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr) 
+                        })
+                    }
+
+                }  
+            }else{
+                console.log(node.qty);
+                return Template.strExpr({
+                    quantifier: node.qty,
+                    expr: node.expr.accept(this),
+                    destination: getExprId(this.currentChoice, this.currentExpr),
+                });
+            }
         }else{
             if(node.expr instanceof CST.Identifier){
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
@@ -223,6 +249,7 @@ export default class FortranTranslator{
             choice: this.currentChoice,
             signature: Object.keys(node.params), // params of the function
             returnType: node.returnType,
+            
             paramDeclarations: Object.entries(node.params).map(
                 ([label, ruleId]) =>
                     `${getReturnType(
