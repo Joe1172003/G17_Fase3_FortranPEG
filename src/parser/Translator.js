@@ -247,21 +247,50 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitClase(node) {
-        // [abc0-9A-Z]
         let characterClass = [];
         const set = node.chars
             .filter((char) => typeof char === 'string')
-            .map((char) => `'${char}'`);
+            .map((char) => {
+                if (char === ' ') {
+                    return 'char(32)';  
+                } else if (char === '\\n') {
+                    return 'char(10)';
+                } else if (char === '\\r') {
+                    return 'char(13)';
+                } else if (char === '\\t') {
+                    return 'char(9)';
+                } else if (char === '\\b') {
+                    return 'char(8)';
+                } else if (char === '\\f') {
+                    return 'char(12)';
+                } else if (char === '\\v') {
+                    return 'char(11)';
+                } else if (char === "\\'") {
+                    return 'char(39)';
+                } else if (char === '\\"') {
+                    return 'char(34)';
+                } else if (char === '\\\\') {
+                    return 'char(92)';
+                } else {
+                    return (node.isCase) ? `'${char.toLowerCase()}'` : `'${char}'`;
+                }
+            });
         const ranges = node.chars
             .filter((char) => char instanceof CST.Range)
-            .map((range) => range.accept(this));
+            .map((range) => {
+                if (node.isCase) {
+                    range.top = range.top.toLowerCase();
+                    range.bottom = range.bottom.toLowerCase();
+                }
+                return `acceptRange('${range.bottom}', '${range.top}', ${(node.isCase) ? '.true.' : '.false.'})`;
+            });
         if (set.length !== 0) {
-            characterClass = [`acceptSet([${set.join(',')}])`];
+            characterClass = [`acceptSet([${set.join(',')}], ${(node.isCase) ? '.true.' : 'false'})`];
         }
         if (ranges.length !== 0) {
             characterClass = [...characterClass, ...ranges];
         }
-        return `(${characterClass.join(' .or. ')})`; // acceptSet(['a','b','c']) .or. acceptRange('0','9') .or. acceptRange('A','Z')
+        return `(${characterClass.join(' .or. ')})`;
     }
 
     /**
