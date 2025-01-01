@@ -1,107 +1,243 @@
 import * as CST from '../visitor/CST.js';
+import * as Template from '../Templates.js';
+import {getActionId, getReturnType, getExprId, getRuleId} from './utils.js';
 
 /**
  * @typedef {import('../visitor/Visitor.js').default<string>} Visitor
+ * @typedef {import('../visitor/Visitor.js').ActionTypes} ActionTypes
  */
+
 /**
  * @implements {Visitor}
  */
 
 export default class FortranTranslator{
+    /** @type {ActionTypes} */
+    actionReturnTypes;
+    /** @type {string[]} */
+    actions;
+    /** @type {boolean} */
+    translatingStart;
+    /** @type {string} */
+    currentRule;
+    /** @type {number} */
+    currentChoice;
+    /** @type {number} */
+    currentExpr;
+
+    /** @param {ActionTypes} returnTypes */ 
+
+    constructor(returnTypes){
+        this.actionReturnTypes = returnTypes
+        this.actions = [];
+        this.translatingStart = false;
+        this.currentRule = '';
+        this.currentChoice = 0;
+        this.currentExpr = 0;
+    }
+
     /**
-     * @param {CST.Productions} node
+     * @param {CST.Grammar} node
      * @this {Visitor}
-     */ 
+    */
 
-    visitProductions(node){
-        return `
-        function peg_${node.id}() result(accept)
-            logical :: accept
-            integer :: i
+    visitGrammar(node){
+        const rules = node.rules.map((rule) => rule.accept(this));
 
-            accept = .false.
-            ${node.expr.accept(this)}
-            ${
-                node.start
-                    ? `
-                    if (.not. acceptEOF()) then
-                        return
-                    end if
-                    `
-                    : ''
-            }
-            accept = .true.
-        end function peg_${node.id}
-        `;
+        return Template.main({
+            beforeContains: node.globalCode?.before ?? '',
+            afterContains: node.globalCode?.after ?? '',
+            startingRuleId: getRuleId(node.rules[0].id),
+            startingRuleType: getReturnType(
+                getActionId(node.rules[0].id, 0),
+                this.actionReturnTypes
+            ),
+            actions: this.actions,
+            rules
+        });
+    }
+
+    /**
+     * @param {CST.Regla} node
+     * @this {Visitor}
+     */
+    visitRegla(node){
+        this.currentRule = node.id
+        this.currentChoice = 0;
+
+        if(node.start) this.translatingStart = true;
+
+        const ruleTranslation = Template.rule({
+            id: node.id,
+            returnTypes: getReturnType(
+                getActionId(node.id, this.currentChoice), this.actionReturnTypes
+            ),
+            exprDeclarations: node.expr.exprs.flatMap((election, i) => 
+                election.exprs.filter((expr) => expr instanceof CST.Pluck)
+                .map((label, j)=>{
+                    const expr = label.labeledExpr.annotatedExpr.expr;
+                    return `${
+                        expr instanceof CST.Identifier 
+                        ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
+                        : 'character(len=:), allocatable'
+                    } :: expr_${i}_${j}`
+                })) ,
+                expr: node.expr.accept(this)
+        });
+        this.translatingStart = false;
+        return ruleTranslation;
     }
     
     /**
      * @param {CST.Options} node
      * @this {Visitor}
-     */
-
-    visitOptions(node) {
-        const template = `
-        do i = 0, ${node.exprs.length}
-            select case(i)
-                ${node.exprs
-                    .map(
-                        (expr, i) => `
-                        case(${i})
-                            ${expr.accept(this)}
-                            exit
-                        `
-                    )
-                    .join('\n')}
-            case default
-                return
-            end select
-        end do
-        `;
-        return template;
-    }
+    */
+   visitOptions(node){
+        return Template.election({
+            exprs: node.exprs.map((expr) =>{
+                const traslation = expr.accept(this)
+                this.currentChoice++; 
+                return traslation;
+            }),
+        });
+   }
 
     /**
      * @param {CST.Union} node
      * @this {Visitor}
      */
-    visitUnion(node) {
-        return node.exprs.map((expr) => expr.accept(this)).join('\n');
+
+    visitUnion(node){
+        
+        const matchExprs = node.exprs.filter(
+            (expr) => expr instanceof CST.Pluck
+        );
+
+        const exprVars = matchExprs.map(
+            (_, i) => `expr_${this.currentChoice}_${i}`
+        );
+
+        /** @type {string[]} */
+        let neededExprs;
+        /** @type {string} */
+        let resultExpr;
+        
+        const currFnId = getActionId(this.currentRule, this.currentChoice);
+        if(currFnId in this.actionReturnTypes){ 
+            neededExprs = exprVars.filter( // save arr of the labels
+                (_, i) => matchExprs[i].labeledExpr.label
+            );
+            resultExpr = Template.fnResultExpr({
+                fnId: getActionId(this.currentRule, this.currentChoice),
+                exprs: neededExprs.length > 0 ? neededExprs : []
+            });
+        }else{
+            neededExprs = exprVars.filter((_, i) => matchExprs[i].pluck);
+            resultExpr = Template.strResultExpr({
+                exprs: neededExprs.length > 0 ? neededExprs : exprVars
+            });
+        }
+        this.currentExpr = 0;
+
+        if(node.action) this.actions.push(node.action.accept(this));
+       
+        return Template.union({
+            exprs: node.exprs.map((expr) =>{
+                const traslation = expr.accept(this);
+                if(expr instanceof CST.Pluck) this.currentExpr++;
+                return traslation
+            }),
+            startingRule: this.translatingStart,
+            resultExpr,
+        });
+    }   
+
+    /**
+     * @param {CST.Pluck} node
+     * @this {Visitor}
+     */
+    visitPluck(node){
+        return node.labeledExpr.accept(this);
     }
 
     /**
-     * @param {CST.Expresion} node
+     * @param {CST.Label} node
      * @this {Visitor}
      */
+    visitLabel(node){
+        return node.annotatedExpr.accept(this);
+    }
 
-    visitExpression(node) {
-        const condition = node.expr.accept(this);
-        switch (node.qty) {
-            case '+':
-                return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                do while (.not. cursor > len(input))
-                    if (.not. (${condition})) then
-                        exit
-                    end if
-                end do
-                `;
-            default:
-                return `
-                if (.not. (${condition})) then
-                    cycle
-                end if
-                `;
+    /**
+     * @param {CST.Annotated} node
+     * @this {Visitor}
+     */
+    visitAnnotated(node){
+        if(node.qty && typeof node.qty === 'string'){ // +, *, ?
+            if(node.expr instanceof CST.Identifier){
+                // TODO: Implement quantifiers (i.e., ?, *, +)
+                // expr_0_0 = peg_fizz()
+                return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
+            }
+            return Template.strExpr({
+                quantifier: node.qty,
+                expr: node.expr.accept(this),
+                destination: getExprId(this.currentChoice, this.currentExpr),
+            });
+        } else if(node.qty){ // TODO: Implement repetitions (e.g., |3|, |1..3|, etc...)
+            throw new Error('Repetitions not implemented.');
+        }else{
+            if(node.expr instanceof CST.Identifier){
+                return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
+            }
+            return Template.strExpr({
+                expr: node.expr.accept(this),
+                destination: getExprId(this.currentChoice, this.currentExpr),
+            });
         }
+    }
+
+    /**
+     * @param {CST.Assertion} node
+     * @this {Visitor}
+     */
+    visitAssertion(node) {
+        throw new Error('Method not implemented.');
+    }
+
+    /**
+     * @param {CST.NegAssertion} node
+     * @this {Visitor}
+     */
+    visitNegAssertion(node) {
+        throw new Error('Method not implemented.');
+    }
+
+    /**
+     * @param {CST.Predicate} node
+     * @this {Visitor}
+     */
+    visitPredicate(node){
+        return Template.action({
+            ruleId: this.currentRule,
+            choice: this.currentChoice,
+            signature: Object.keys(node.params), // params of the function
+            returnType: node.returnType,
+            paramDeclarations: Object.entries(node.params).map(
+                ([label, ruleId]) =>
+                    `${getReturnType(
+                        getActionId(ruleId, this.currentChoice),
+                        this.actionReturnTypes
+                    )} :: ${label}`
+            ),
+            code: node.code
+        });
     }
 
     /**
      * @param {CST.String} node
      * @this {Visitor}
      */
-
     visitString(node) {
         return `acceptString('${node.val}')`;
     }
@@ -111,6 +247,7 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitClase(node) {
+        // [abc0-9A-Z]
         let characterClass = [];
         const set = node.chars
             .filter((char) => typeof char === 'string')
@@ -124,7 +261,7 @@ export default class FortranTranslator{
         if (ranges.length !== 0) {
             characterClass = [...characterClass, ...ranges];
         }
-        return characterClass.join(' .or. ');
+        return `(${characterClass.join(' .or. ')})`; // acceptSet(['a','b','c']) .or. acceptRange('0','9') .or. acceptRange('A','Z')
     }
 
     /**
@@ -140,7 +277,7 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitIdentifier(node) {
-        return `peg_${node.id}()`;
+        return getRuleId(node.id) + '()';
     }
 
     /**
@@ -158,7 +295,7 @@ export default class FortranTranslator{
      */
 
     visitEnd(node) {
-        return 'acceptEOF()';
+        return 'if (.not. acceptEOF()) cycle';
     }
 
 }

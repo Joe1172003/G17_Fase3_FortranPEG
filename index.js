@@ -1,7 +1,8 @@
 import * as monaco from 'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/+esm';
 import { parse } from './src/grammar/gramatica.js';
 import { ErrorReglas } from './src/grammar/error.js';
-import generateParser from './src/parser/utils.js';
+import { generateParser } from './src/parser/utils.js';
+
 
 export let ids = [];
 export let usos = [];
@@ -31,7 +32,7 @@ const analizar = () => {
     ids.length = 0;
     usos.length = 0;
     errores.length = 0;
-    try {
+
         const cst = parse(entrada);
         if (errores.length > 0) {
             salida.setValue(`Error: ${errores[0].message}`);
@@ -47,45 +48,7 @@ const analizar = () => {
 
         // salida.setValue("Análisis Exitoso");
         // Limpiar decoraciones previas si la validación es exitosa
-        decorations = editor.deltaDecorations(decorations, []);
-
-       
-    } catch (e) {
-        if (e.location === undefined) {
-            salida.setValue(`Error: ${e.message}`);
-        } else {
-            // Mostrar mensaje de error en el editor de salida
-            salida.setValue(
-                `Error: ${e.message}\nEn línea ${e.location.start.line} columna ${e.location.start.column}`
-            );
-
-            // Resaltar el error en el editor de entrada
-            decorations = editor.deltaDecorations(decorations, [
-                {
-                    range: new monaco.Range(
-                        e.location.start.line,
-                        e.location.start.column,
-                        e.location.start.line,
-                        e.location.start.column + 1
-                    ),
-                    options: {
-                        inlineClassName: 'errorHighlight', // Clase CSS personalizada para cambiar color de letra
-                    },
-                },
-                {
-                    range: new monaco.Range(
-                        e.location.start.line,
-                        e.location.start.column,
-                        e.location.start.line,
-                        e.location.start.column
-                    ),
-                    options: {
-                        glyphMarginClassName: 'warningGlyph', // Clase CSS para mostrar un warning en el margen
-                    },
-                },
-            ]);
-        }
-    }
+        decorations = editor.deltaDecorations(decorations, []); 
 };
 
 // Escuchar cambios en el contenido del editor
