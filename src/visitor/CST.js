@@ -1,5 +1,5 @@
 
-// Auto-generated
+// Auto-generado
 
 /**
  * @template T
@@ -13,13 +13,15 @@
 /**
  * @implements {Node}
  */
-export class Block {
+export class Grammar {
     /**
      *
-     * @param {string} blocCode
+     * @param {Regla[]} rules
+	 * @param {{ before: string; after?: string }=} globalCode
      */
-    constructor(blocCode) {
-        this.blocCode = blocCode;
+    constructor(rules, globalCode) {
+        this.rules = rules;
+		this.globalCode = globalCode;
     }
 
     /**
@@ -28,7 +30,7 @@ export class Block {
      * @returns {T}
      */
     accept(visitor) {
-        return visitor.visitBlock(this);
+        return visitor.visitGrammar(this);
     }
 }
     
@@ -36,7 +38,7 @@ export class Block {
 /**
  * @implements {Node}
  */
-export class Productions {
+export class Regla {
     /**
      *
      * @param {string} id
@@ -57,7 +59,7 @@ export class Productions {
      * @returns {T}
      */
     accept(visitor) {
-        return visitor.visitProductions(this);
+        return visitor.visitRegla(this);
     }
 }
     
@@ -91,10 +93,12 @@ export class Options {
 export class Union {
     /**
      *
-     * @param {Expression[]} exprs
+     * @param {Node[]} exprs
+	 * @param {Predicate=} action
      */
-    constructor(exprs) {
+    constructor(exprs, action) {
         this.exprs = exprs;
+		this.action = action;
     }
 
     /**
@@ -111,17 +115,17 @@ export class Union {
 /**
  * @implements {Node}
  */
-export class Expression {
+export class Predicate {
     /**
      *
-     * @param {Node} expr
-	 * @param {string=} label
-	 * @param {string=} qty
+     * @param {string} returnType
+	 * @param {string} code
+	 * @param {{ [label: string]: string }=} params
      */
-    constructor(expr, label, qty) {
-        this.expr = expr;
-		this.label = label;
-		this.qty = qty;
+    constructor(returnType, code, params) {
+        this.returnType = returnType;
+		this.code = code;
+		this.params = params;
     }
 
     /**
@@ -130,7 +134,130 @@ export class Expression {
      * @returns {T}
      */
     accept(visitor) {
-        return visitor.visitExpression(this);
+        return visitor.visitPredicate(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class Pluck {
+    /**
+     *
+     * @param {Label} labeledExpr
+	 * @param {boolean=} pluck
+     */
+    constructor(labeledExpr, pluck) {
+        this.labeledExpr = labeledExpr;
+		this.pluck = pluck;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitPluck(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class Label {
+    /**
+     *
+     * @param {Annotated} annotatedExpr
+	 * @param {string=} label
+     */
+    constructor(annotatedExpr, label) {
+        this.annotatedExpr = annotatedExpr;
+		this.label = label;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitLabel(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class Annotated {
+    /**
+     *
+     * @param {Node} expr
+	 * @param {(string|Node)=} qty
+	 * @param {boolean=} text
+     */
+    constructor(expr, qty, text) {
+        this.expr = expr;
+		this.qty = qty;
+		this.text = text;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitAnnotated(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class Assertion {
+    /**
+     *
+     * @param {Node} assertion
+     */
+    constructor(assertion) {
+        this.assertion = assertion;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitAssertion(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class NegAssertion {
+    /**
+     *
+     * @param {Node} assertion
+     */
+    constructor(assertion) {
+        this.assertion = assertion;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitNegAssertion(this);
     }
 }
     

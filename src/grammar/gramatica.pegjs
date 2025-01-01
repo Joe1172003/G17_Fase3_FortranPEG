@@ -4,9 +4,9 @@
     import { errores } from '../../index.js'
     import * as n from '../visitor/CST.js';
 }}
-
+  
 gramatica
-  = _  block:block_code? prods:producciones+ _ {
+  = _  code:globalCode? prods:regla+ _ {
     let duplicados = ids.filter((item, index) => ids.indexOf(item) !== index);
     if (duplicados.length > 0) {
         errores.push(new ErrorReglas("Regla duplicada: " + duplicados[0]));
@@ -19,21 +19,18 @@ gramatica
     }
     
     prods[0].start = true;
-    if(block){
-      prods.push(block)
-    }
-
-    return prods;
+    return new n.Grammar(prods, code);
   }
 
+globalCode
+  = "{" _before:$(. !"contains")* [ \t\n\r]* "contains" [ \t\n\r]* after:$[^}]* "}"{
+    return after ? {before, after} : {before}
+  }
 
-block_code 
-          = "\{" codeBlock:([^}]*) "\}" {return new n.Block(codeBlock.join('')) }
-
-producciones
-  = _ id:identificador _ alias:$(literales)? _ "=" _ expr:opciones (_";")? {
+regla
+  = _ id:identificador _ alias:(literales)? _ "=" _ expr:opciones (_ ";")? {
     ids.push(id);
-    return new n.Productions(id, expr, alias);
+    return new n.Regla(id, expr, alias);
   }
 
 opciones
@@ -42,54 +39,86 @@ opciones
   }
 
 union
-  = expr:expresion rest:(_ @expresion !(_ literales? _ "=") )* {
-    return new n.Union([expr, ...rest]);
+  = expr:parsingExpression rest:(_ @parsingExpression !(_ literales? _ "=") )* action:(_ @predicate)? {
+    const exprs = [expr, ...rest];
+    const labeledExprs = exprs  
+        .filter((expr) => expr instanceof n.Pluck)
+        .filter((expr) => expr.labeledExpr.label);
+    if (labeledExprs.length > 0) {
+        action.params = labeledExprs.reduce((args, labeled) => {
+            const expr = labeled.labeledExpr.annotatedExpr.expr;
+            args[labeled.labeledExpr.label] =
+                expr instanceof n.Identifier ? expr.id : '';
+            return args;
+        }, {});
+    }
+    return new n.Union(exprs, action);
   }
 
-expresion
-  = label:$(etiqueta/varios)? _ expr:expresiones _ qty:$([?+*]/conteo)? {
-    console.log(qty)
-    return new n.Expression(expr, label, qty);
+    
+parsingExpression
+  = pluck 
+  / "!" assertion:(match/predicate){
+    return new n.NegAssertion(assertion);
+  }
+  / "&" assertion:(match/predicate){
+    return new n.Assertion(assertion);
+  }
+  / "!." {
+    return new n.End();
   }
 
-etiqueta = ("@")? _ id:identificador _ ":" (varios)?
 
-varios = ("!"(!".") /"$"/"@"/"&")
+pluck
+  = pluck:"@"? _ expr:label {
+   
+    return new n.Pluck(expr, pluck ? true : false);
+  }
 
-expresiones
+label 
+  = label:(@identificador _ ":")? _ expr:annotated {
+ 
+    return new n.Label(expr, label);
+  }
+
+annotated
+  = text:"$"? _ expr:match _ qty:$([?+*]/conteo)? {
+ 
+    return new n.Annotated(expr, qty, text ? true : false);
+  }
+
+match
   = id:identificador {
     usos.push(id);
     return new n.Identifier(id);
   }
   / val:$literales isCase:"i"? {
-    return new n.String(val.replace(/['"]/g, ''), isCase);
+    return new n.String(val.replace(/['"]/g, ''), isCase ? true : false);
   }
-  / "(" _ opciones:opciones _ ")"
+  / "(" _ @opciones _ ")"
   / exprs:clase isCase:"i"?{
-    return new n.Clase(exprs, isCase);
-
+    return new n.Clase(exprs, isCase ? true : false);
   }
   / "." {
-    return new n.Dot(true);
+    return new n.Dot();
   }
-  / "!."{
-    return new n.End();
-  }
-
-// conteo = "|" parteconteo _ (_ delimitador )? _ "|"
+  
 
 conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text()}
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
         / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
 
-// parteconteo = identificador
-//             / [0-9]? _ ".." _ [0-9]?
-// 			/ [0-9]
+predicate
+  = "{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {
+    return new n.Predicate(returnType, code, {})
+  }
 
-// delimitador =  "," _ expresion
+predicateReturnType
+  = t:$(. !"::")+ [ \t\n\r]* "::" [ \t\n\r]* "res"{
+    return t.trim();
+  }
 
-// Regla principal que analiza corchetes con contenido
 clase
   = "[" @contenidoClase+ "]"
 
@@ -131,11 +160,6 @@ escape = "'"
         / "u"
 
 secuenciaFinLinea = "\r\n" / "\n" / "\r" / "\u2028" / "\u2029"
-
-// literales = 
-//     "\"" [^"]* "\""
-//     / "'" [^']* "'"
-    
 
 numero = [0-9]+
 
