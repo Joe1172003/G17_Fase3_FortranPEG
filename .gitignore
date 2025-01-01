@@ -131,3 +131,5 @@ dist
 
 # Auto generated tools
 src/tools/
+
+package.json

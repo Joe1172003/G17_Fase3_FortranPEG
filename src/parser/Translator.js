@@ -1,215 +1,243 @@
 import * as CST from '../visitor/CST.js';
+import * as Template from '../Templates.js';
+import {getActionId, getReturnType, getExprId, getRuleId} from './utils.js';
 
 /**
  * @typedef {import('../visitor/Visitor.js').default<string>} Visitor
+ * @typedef {import('../visitor/Visitor.js').ActionTypes} ActionTypes
  */
+
 /**
  * @implements {Visitor}
  */
 
 export default class FortranTranslator{
-    /**
-     * @param {CST.Block} node
-     * @this {Visitor}
-     */ 
-    visitBlock(node){
-        return node.blocCode
-    }
-    
-    /**
-     * @param {CST.Productions} node
-     * @this {Visitor}
-     */ 
-    visitProductions(node){
-        return `
-        function peg_${node.id}() result(accept)
-            logical :: accept
-            integer :: i
-            integer :: j
+    /** @type {ActionTypes} */
+    actionReturnTypes;
+    /** @type {string[]} */
+    actions;
+    /** @type {boolean} */
+    translatingStart;
+    /** @type {string} */
+    currentRule;
+    /** @type {number} */
+    currentChoice;
+    /** @type {number} */
+    currentExpr;
 
-            j = 0
-            accept = .false.
-            ${node.expr.accept(this)}
-            ${
-                node.start
-                    ? `
-                    if (.not. acceptEOF()) then
-                        return
-                    end if
-                    `
-                    : ''
-            }
-            accept = .true.
-        end function peg_${node.id}
-        `;
+    /** @param {ActionTypes} returnTypes */ 
+
+    constructor(returnTypes){
+        this.actionReturnTypes = returnTypes
+        this.actions = [];
+        this.translatingStart = false;
+        this.currentRule = '';
+        this.currentChoice = 0;
+        this.currentExpr = 0;
+    }
+
+    /**
+     * @param {CST.Grammar} node
+     * @this {Visitor}
+    */
+
+    visitGrammar(node){
+        const rules = node.rules.map((rule) => rule.accept(this));
+
+        return Template.main({
+            beforeContains: node.globalCode?.before ?? '',
+            afterContains: node.globalCode?.after ?? '',
+            startingRuleId: getRuleId(node.rules[0].id),
+            startingRuleType: getReturnType(
+                getActionId(node.rules[0].id, 0),
+                this.actionReturnTypes
+            ),
+            actions: this.actions,
+            rules
+        });
+    }
+
+    /**
+     * @param {CST.Regla} node
+     * @this {Visitor}
+     */
+    visitRegla(node){
+        this.currentRule = node.id
+        this.currentChoice = 0;
+
+        if(node.start) this.translatingStart = true;
+
+        const ruleTranslation = Template.rule({
+            id: node.id,
+            returnTypes: getReturnType(
+                getActionId(node.id, this.currentChoice), this.actionReturnTypes
+            ),
+            exprDeclarations: node.expr.exprs.flatMap((election, i) => 
+                election.exprs.filter((expr) => expr instanceof CST.Pluck)
+                .map((label, j)=>{
+                    const expr = label.labeledExpr.annotatedExpr.expr;
+                    return `${
+                        expr instanceof CST.Identifier 
+                        ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
+                        : 'character(len=:), allocatable'
+                    } :: expr_${i}_${j}`
+                })) ,
+                expr: node.expr.accept(this)
+        });
+        this.translatingStart = false;
+        return ruleTranslation;
     }
     
     /**
      * @param {CST.Options} node
      * @this {Visitor}
-     */
-
-    visitOptions(node) {
-        const template = `
-        do i = 0, ${node.exprs.length}
-            select case(i)
-                ${node.exprs
-                    .map(
-                        (expr, i) => `
-                        case(${i})
-                            ${expr.accept(this)}
-                            exit
-                        `
-                    )
-                    .join('\n')}
-            case default
-                return
-            end select
-        end do
-        `;
-        return template;
-    }
+    */
+   visitOptions(node){
+        return Template.election({
+            exprs: node.exprs.map((expr) =>{
+                const traslation = expr.accept(this)
+                this.currentChoice++; 
+                return traslation;
+            }),
+        });
+   }
 
     /**
      * @param {CST.Union} node
      * @this {Visitor}
      */
-    visitUnion(node) {
-        return node.exprs.map((expr) => expr.accept(this)).join('\n');
+
+    visitUnion(node){
+        
+        const matchExprs = node.exprs.filter(
+            (expr) => expr instanceof CST.Pluck
+        );
+
+        const exprVars = matchExprs.map(
+            (_, i) => `expr_${this.currentChoice}_${i}`
+        );
+
+        /** @type {string[]} */
+        let neededExprs;
+        /** @type {string} */
+        let resultExpr;
+        
+        const currFnId = getActionId(this.currentRule, this.currentChoice);
+        if(currFnId in this.actionReturnTypes){ 
+            neededExprs = exprVars.filter( // save arr of the labels
+                (_, i) => matchExprs[i].labeledExpr.label
+            );
+            resultExpr = Template.fnResultExpr({
+                fnId: getActionId(this.currentRule, this.currentChoice),
+                exprs: neededExprs.length > 0 ? neededExprs : []
+            });
+        }else{
+            neededExprs = exprVars.filter((_, i) => matchExprs[i].pluck);
+            resultExpr = Template.strResultExpr({
+                exprs: neededExprs.length > 0 ? neededExprs : exprVars
+            });
+        }
+        this.currentExpr = 0;
+
+        if(node.action) this.actions.push(node.action.accept(this));
+       
+        return Template.union({
+            exprs: node.exprs.map((expr) =>{
+                const traslation = expr.accept(this);
+                if(expr instanceof CST.Pluck) this.currentExpr++;
+                return traslation
+            }),
+            startingRule: this.translatingStart,
+            resultExpr,
+        });
+    }   
+
+    /**
+     * @param {CST.Pluck} node
+     * @this {Visitor}
+     */
+    visitPluck(node){
+        return node.labeledExpr.accept(this);
     }
 
     /**
-     * @param {CST.Expresion} node
+     * @param {CST.Label} node
      * @this {Visitor}
      */
+    visitLabel(node){
+        return node.annotatedExpr.accept(this);
+    }
 
-    visitExpression(node) {
-        let number1, number2 = null;
-        const condition = node.expr.accept(this);
-        const negation = node.label === '!' ? '' : '.not.';
-        if(node.qty.length > 1){
-            node.qty = node.qty.replace(/\|/g, '')
-
-            if (!node.qty.includes(",") && !node.qty.includes("..")) {
-                let tmp = (!isNaN(parseInt(node.qty))) ? parseInt(node.qty) : node.qty;
-                return `
-                    do while(cursor <= len(input))
-                        if(.not. (${condition})) then
-                            cursor = cursor - 1
-                            exit
-                        end if
-                        j = j + 1
-                    end do
-                    if(.not. (j == ${tmp})) then
-                        cycle
-                    end if
-                `;
-            }else if(node.qty.split(',').length == 2){
-
-                const parts = node.qty.split(',');
-                if(parts[0].includes('..')){
-                    console.log('=> entrnado a min..max');
-                    const nums = parts[0].split('..');
-                    number1, number2 = null;
-                
-                    if (!isNaN(parseInt(nums[0]))) number1 = parseInt(nums[0]);
-                    if (!isNaN(parseInt(nums[1]))) number2 = parseInt(nums[1]);
-    
-                    if (number1 && number2) {
-                        return `
-                        do while(cursor <= len(input))
-                            if(.not. (${condition})) then
-                                cursor = cursor - 1
-                                exit
-                            end if
-                            j = j + 1
-                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
-                                cursor = cursor + 1
-                                cycle
-                            else
-                                exit
-                            end if
-                        end do
-                        if(.not. (j >= ${number1} .and. j <= ${number2})) then
-                            cycle
-                        end if
-                        `;
-                    }
-                }else{
-                    number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
-                    return `
-                    do while(cursor <= len(input))
-                            if(.not. (${condition})) then
-                                cursor = cursor - 1
-                                exit
-                            end if
-                            j = j + 1
-                            if (input(cursor:cursor) == ${parts[1]} .and. input(cursor+1:cursor+1) == '${node.expr.val}') then
-                                cursor = cursor + 1
-                                cycle
-                            else
-                                exit
-                            end if
-                        end do
-
-                        if(.not. (j == ${number1})) then
-                            cycle
-                        end if
-                    `
-                }
-               
-            }else{
-                number1, number2 = null;
-                console.log(node.qty.split(',')[0][0]);
-                if(! isNaN(parseInt(node.qty.split(',')[0][0]))){
-                    number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
-                }
-                console.log(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]);
-                if(! isNaN(parseInt(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]))){
-                    number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
-                }
-                console.log(number1, number2);
-                if(number1 && number2){
-                    return `
-                    do while(cursor <= len(input))
-                        if(.not. (${condition})) then
-                            cursor = cursor - 1
-                            exit
-                        end if
-                        j = j + 1
-                    end do
-                    if(.not. (j >= ${number1} .and. j <= ${number2})) then
-                        cycle
-                    end if
-                    `
-                }else if(number1){
-                   
-                    if(number1 == 0){
-                        node.qty = "*";
-                        return this.getIfQty(node);
-                    }
-                    node.qty = "+";
-                    return this.getIfQty(node);
-                }else if(number2){
-                    node.qty = "?";
-                    return this.getIfQty(node);
-                }else{
-                    node.qty = "*";
-                    return this.getIfQty(node);
-                }
-
-
+    /**
+     * @param {CST.Annotated} node
+     * @this {Visitor}
+     */
+    visitAnnotated(node){
+        if(node.qty && typeof node.qty === 'string'){ // +, *, ?
+            if(node.expr instanceof CST.Identifier){
+                // TODO: Implement quantifiers (i.e., ?, *, +)
+                // expr_0_0 = peg_fizz()
+                return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
             }
+            return Template.strExpr({
+                quantifier: node.qty,
+                expr: node.expr.accept(this),
+                destination: getExprId(this.currentChoice, this.currentExpr),
+            });
+        } else if(node.qty){ // TODO: Implement repetitions (e.g., |3|, |1..3|, etc...)
+            throw new Error('Repetitions not implemented.');
         }else{
-            return this.getIfQty(node);
+            if(node.expr instanceof CST.Identifier){
+                return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
+            }
+            return Template.strExpr({
+                expr: node.expr.accept(this),
+                destination: getExprId(this.currentChoice, this.currentExpr),
+            });
         }
+    }
+
+    /**
+     * @param {CST.Assertion} node
+     * @this {Visitor}
+     */
+    visitAssertion(node) {
+        throw new Error('Method not implemented.');
+    }
+
+    /**
+     * @param {CST.NegAssertion} node
+     * @this {Visitor}
+     */
+    visitNegAssertion(node) {
+        throw new Error('Method not implemented.');
+    }
+
+    /**
+     * @param {CST.Predicate} node
+     * @this {Visitor}
+     */
+    visitPredicate(node){
+        return Template.action({
+            ruleId: this.currentRule,
+            choice: this.currentChoice,
+            signature: Object.keys(node.params), // params of the function
+            returnType: node.returnType,
+            paramDeclarations: Object.entries(node.params).map(
+                ([label, ruleId]) =>
+                    `${getReturnType(
+                        getActionId(ruleId, this.currentChoice),
+                        this.actionReturnTypes
+                    )} :: ${label}`
+            ),
+            code: node.code
+        });
     }
 
     /**
      * @param {CST.String} node
      * @this {Visitor}
      */
-
     visitString(node) {
         return `acceptString('${node.val}')`;
     }
@@ -219,6 +247,7 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitClase(node) {
+        // [abc0-9A-Z]
         let characterClass = [];
         const set = node.chars
             .filter((char) => typeof char === 'string')
@@ -232,7 +261,7 @@ export default class FortranTranslator{
         if (ranges.length !== 0) {
             characterClass = [...characterClass, ...ranges];
         }
-        return characterClass.join(' .or. ');
+        return `(${characterClass.join(' .or. ')})`; // acceptSet(['a','b','c']) .or. acceptRange('0','9') .or. acceptRange('A','Z')
     }
 
     /**
@@ -248,7 +277,7 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitIdentifier(node) {
-        return `peg_${node.id}()`;
+        return getRuleId(node.id) + '()';
     }
 
     /**
@@ -266,48 +295,7 @@ export default class FortranTranslator{
      */
 
     visitEnd(node) {
-        return 'acceptEOF()';
-    }
-
-    getIfQty(node){
-        const condition = node.expr.accept(this);
-        const negation = node.label === '!' ? '' : '.not.';
-        switch (node.qty) {
-            case '+':
-                return `
-                if (${negation} (${condition})) then
-                    cursor = cursor - 1
-                    cycle
-                end if
-                do while (.not. cursor > len(input))
-                    if (${negation} (${condition})) then
-                        cursor = cursor - 1
-                        exit
-                    end if
-                end do
-                `;
-            case '*':
-                return `
-                do while (.not. cursor > len(input))
-                    if (${negation} (${condition})) then
-                        cursor = cursor - 1
-                        exit
-                    end if
-                end do
-                `;
-            case '?':
-                return `
-                if (${condition}) then
-                end if
-                `;
-            default:
-                return `
-                if (${negation} (${condition})) then
-                    cursor = cursor - 1
-                    cycle
-                end if
-                `;
-        }
+        return 'if (.not. acceptEOF()) cycle';
     }
 
 }
