@@ -26,6 +26,21 @@ module parser
 
     contains
 
+    function to_lower(strIn) result(strOut)
+        character(len=*), intent(in) :: strIn
+        character(len=len(strIn)) :: strOut
+        integer :: i, j
+
+        do i = 1, len(strIn)
+            j = iachar(strIn(i:i))
+            if (j >= iachar("A") .and. j <= iachar("Z")) then
+                strOut(i:i) = achar(iachar(strIn(i:i)) + 32)
+            else 
+                strOut(i:i) = strIn(i:i)
+            end if
+        end do
+    end function to_lower
+
     ${data.afterContains}
 
     function parse(str) result(res)
@@ -57,27 +72,44 @@ module parser
     end function acceptString
 
 
-    function acceptRange(bottom, top) result(accept)
+    function acceptRange(bottom, top, isCase) result(accept)
         character(len=1) :: bottom, top
+        logical, intent(in) :: isCase
         logical :: accept
 
-        if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
-            accept = .false.
-            return
+        if (isCase) then
+            if(.not. (to_lower(input(cursor:cursor)) >= bottom .and. to_lower(input(cursor:cursor)) <= top)) then
+                accept = .false.
+                return
+            end if
+        else
+            if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
+                accept = .false.
+                return
+            end if
         end if
+
         cursor = cursor + 1
         accept = .true.
     end function acceptRange
 
-
-    function acceptSet(set) result(accept)
+    function acceptSet(set, isCase) result(accept)
         character(len=1), dimension(:) :: set
+        logical, intent(in) :: isCase
         logical :: accept
 
-        if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
-            accept = .false.
-            return
+        if (isCase) then
+            if(.not. (findloc(set, to_lower(input(cursor:cursor)), 1) > 0)) then
+                accept = .false.
+                return
+            end if
+        else
+            if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
+                accept = .false.
+                return
+            end if
         end if
+
         cursor = cursor + 1
         accept = .true.
     end function acceptSet
