@@ -205,6 +205,7 @@ export const rule = (data) => {
 *  exprs: string[];
 *  optionNumber: number;
 *  type: string;
+*  isStartingRule?: boolean
 * }} data
 * @returns
 */
@@ -221,7 +222,7 @@ export const election = (data) => `
             `
         ).join('')}
         case default
-            call pegError()
+            ${data.isStartingRule ? 'call pegError()' : 'return'}
         end select
     end do
 `;

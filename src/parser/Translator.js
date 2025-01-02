@@ -130,7 +130,8 @@ export default class FortranTranslator{
                 return traslation;
             }),
             optionNumber: this.counterOptions++,
-            type: node.type
+            type: node.type,
+            isStartingRule: this.translatingStart
         });
    }
 
@@ -311,6 +312,7 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitGroup(node) {
+        console.log("node action",node.action);
         node.exprs.map((expr) => {
             expr.type = 'group';
         })
@@ -319,7 +321,7 @@ export default class FortranTranslator{
             exprs: node.exprs.map((expr) => expr.accept(this)),
             destination: getExprId(this.currentChoice, this.currentExpr),
             groupNumber: this.currentGroup++
-        })
+        })  
     }
 
     /**
