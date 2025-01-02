@@ -26,6 +26,8 @@ export default class FortranTranslator{
     currentExpr;
     /** @type {number} */
     currentGroup;
+    /** @type {number[]}*/
+    groupsVariables
 
     /** @param {ActionTypes} returnTypes */ 
 
@@ -37,6 +39,7 @@ export default class FortranTranslator{
         this.currentChoice = 0;
         this.currentExpr = 0;
         this.currentGroup = 0;
+        this.groupsVariables = []
     }
 
     /**
@@ -46,6 +49,18 @@ export default class FortranTranslator{
 
     visitGrammar(node){
         const rules = node.rules.map((rule) => rule.accept(this));
+        let gCounter = 0
+        let decArray = []
+        node.rules.forEach((r)=>{
+            r.expr.exprs.forEach((u)=>{
+                u.exprs.forEach((pE)=>{
+                    if(pE.labeledExpr.annotatedExpr.expr instanceof CST.Group){
+                        decArray.push(`integer,private :: savePoint${gCounter++}`)
+                    }
+                })
+            })
+        })
+        console.log(decArray)
 
         return Template.main({
             beforeContains: node.globalCode?.before ?? '',
@@ -56,7 +71,8 @@ export default class FortranTranslator{
                 this.actionReturnTypes
             ),
             actions: this.actions,
-            rules
+            rules,
+            globalDeclarations: decArray
         });
     }
 
@@ -70,23 +86,33 @@ export default class FortranTranslator{
 
         if(node.start) this.translatingStart = true;
 
-        const ruleTranslation = Template.rule({
+        let decArray = node.expr.exprs.flatMap((election, i) => 
+            election.exprs.filter((expr) => expr instanceof CST.Pluck)
+            .map((label, j)=>{
+                const expr = label.labeledExpr.annotatedExpr.expr;
+                return `${
+                    expr instanceof CST.Identifier 
+                    ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
+                    : 'character(len=:), allocatable'
+                } :: expr_${i}_${j}`
+            }))
+        let gCounter = 0;
+        node.expr.exprs.forEach((u)=>{
+            u.exprs.forEach((pE)=>{
+                if(pE.labeledExpr.annotatedExpr.expr instanceof CST.Group){
+                    decArray.push(`integer :: i_${gCounter++}`)
+                }
+            })
+        })
+
+        let ruleTranslation = Template.rule({
             id: node.id,
             returnTypes: getReturnType(
                 getActionId(node.id, this.currentChoice), this.actionReturnTypes
             ),
-            exprDeclarations: node.expr.exprs.flatMap((election, i) => 
-                election.exprs.filter((expr) => expr instanceof CST.Pluck)
-                .map((label, j)=>{
-                    const expr = label.labeledExpr.annotatedExpr.expr;
-                    return `${
-                        expr instanceof CST.Identifier 
-                        ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
-                        : 'character(len=:), allocatable'
-                    } :: expr_${i}_${j}`
-                })) ,
+            exprDeclarations: decArray,
             expr: node.expr.accept(this)
-        });
+        });        
         this.translatingStart = false;
         return ruleTranslation;
     }
@@ -288,6 +314,7 @@ export default class FortranTranslator{
         node.exprs.map((expr) => {
             expr.type = 'group';
         })
+        this.groupsVariables.push(this.currentGroup)
         return Template.group({
             exprs: node.exprs.map((expr) => expr.accept(this)),
             destination: getExprId(this.currentChoice, this.currentExpr),

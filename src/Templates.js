@@ -7,6 +7,7 @@
 *  startingRuleType: string;
 *  rules: string[];
 *  actions: string[];
+*  globalDeclarations: string[];
 * }} data
 * @returns {string}
 */
@@ -16,6 +17,7 @@ module parser
     implicit none
     character(len=:), allocatable, private :: input
     integer, private :: savePoint, lexemeStart, cursor
+    ${data.globalDeclarations.join('\n')}
 
     interface toStr
         module procedure intToStr
@@ -381,7 +383,7 @@ export const group = (data) => {
         ${data.exprs.map(
             (expr, i) => `
             case(${i})
-                cursor = savePoint
+                cursor = savePoint${data.groupNumber}
                 ${expr}
                 exit
             `
