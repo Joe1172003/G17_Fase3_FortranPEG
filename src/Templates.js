@@ -219,7 +219,7 @@ export const election = (data) => `
                 ${expr}
                 exit
             `
-        )}
+        ).join('')}
         case default
             call pegError()
         end select
@@ -378,6 +378,7 @@ export const action = (data) => {
 export const group = (data) => {
     return `
     lexemeStart = cursor
+    savePoint${data.groupNumber} = cursor
     do i_${data.groupNumber} = 0, ${data.exprs.length}
         select case(i_${data.groupNumber})
         ${data.exprs.map(
@@ -387,7 +388,7 @@ export const group = (data) => {
                 ${expr}
                 exit
             `
-        )}
+        ).join('')}
         case default
             exit
         end select
