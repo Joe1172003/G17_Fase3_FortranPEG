@@ -182,10 +182,52 @@ export default class FortranTranslator{
             }
             if(node.qty.length > 1){
                 node.qty = node.qty.replace(/\|/g, '')
-                if(node.qty.split(',').length == 2){
-                    
+                let number1, number2 = null;
+                let delimiter = null;
+
+                if(!node.qty.includes(',') && !node.qty.includes('..')){
+                    const count = (!isNaN(parseInt(node.qty))) ? parseInt(node.qty) : node.qty
+                    return Template.strExpr({
+                        quantifier: 'only-count',
+                        number_1: count,
+                        expr: node.expr.accept(this),
+                        destination: getExprId(this.currentChoice, this.currentExpr)
+                    });
+                }else if(node.qty.split(',').length == 2){
+                    const parts = node.qty.split(',');
+                    number1, number2 = null;
+
+                    if(parts[0].includes('..')){
+                        const num = parts[0].split('..')
+                        delimiter = parts[1]
+                       
+                        if(!isNaN(parseInt(num[0]))) number1 = parseInt(num[0])
+                        if(!isNaN(parseInt(num[1]))) number2 = parseInt(num[1])
+                        
+                        if(number1 && number2){
+                            return Template.strExpr({
+                                quantifier: 'delimiter-minMax',
+                                number_1: number1,
+                                number_2: number2,
+                                delimiter_: delimiter,
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr)
+                            });
+                        }
+                    }else{
+                        number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
+                        delimiter = parts[1]
+                            return Template.strExpr({
+                                quantifier: 'delimiter-count',
+                                number_1: number1,
+                                delimiter_: delimiter,
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr)
+                            });
+                    }
+
                 }else{
-                    let number1, number2 = null;
+                    number1, number2 = null;
                     if(!isNaN(parseInt(node.qty.split(',')[0][0]))){
                        number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
                     }
@@ -193,7 +235,6 @@ export default class FortranTranslator{
                         number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
                     }
                     if(number1 && number2){
-                        console.log(number1, number2);
                         return Template.strExpr({
                             quantifier: 'min-max',
                             number_1: number1,
@@ -201,11 +242,35 @@ export default class FortranTranslator{
                             expr: node.expr.accept(this),
                             destination: getExprId(this.currentChoice, this.currentExpr) 
                         })
-                    }
+                    }else if(number1){
+                        if(number1 === 0){
+                            return Template.strExpr({
+                                quantifier: "*",
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr),
+                            }); 
+                        }
+                        return Template.strExpr({
+                            quantifier: "+",
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                        }); 
+                    }else if(number2){
+                        return Template.strExpr({
+                            quantifier: "?",
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                        }); 
+                    }else{
+                        return Template.strExpr({
+                            quantifier: "*",
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                        }); 
+                    }     
 
                 }  
             }else{
-                console.log(node.qty);
                 return Template.strExpr({
                     quantifier: node.qty,
                     expr: node.expr.accept(this),
