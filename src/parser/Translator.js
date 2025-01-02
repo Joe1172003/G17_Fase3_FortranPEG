@@ -34,6 +34,7 @@ export default class FortranTranslator{
         this.currentRule = '';
         this.currentChoice = 0;
         this.currentExpr = 0;
+        this.labelMap = {};
     }
 
     /**
@@ -165,6 +166,11 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitLabel(node){
+        // register of labels in diccionary
+        if(node.label){
+            const labelName = getExprId(this.currentChoice, this.currentExpr);
+            this.labelMap[node.label] = labelName
+        }
         return node.annotatedExpr.accept(this);
     }
 
@@ -186,7 +192,13 @@ export default class FortranTranslator{
                 let delimiter = null;
 
                 if(!node.qty.includes(',') && !node.qty.includes('..')){
-                    const count = (!isNaN(parseInt(node.qty))) ? parseInt(node.qty) : node.qty
+                    
+                    console.log(this.labelMap); 
+                    
+                    const count = (!isNaN(parseInt(node.qty))) 
+                        ? parseInt(node.qty)
+                        : this.labelMap[node.qty]
+
                     return Template.strExpr({
                         quantifier: 'only-count',
                         number_1: count,
