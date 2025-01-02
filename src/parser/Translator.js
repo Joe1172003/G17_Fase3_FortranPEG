@@ -24,6 +24,8 @@ export default class FortranTranslator{
     currentChoice;
     /** @type {number} */
     currentExpr;
+    /** @type {number} */
+    currentGroup;
 
     /** @param {ActionTypes} returnTypes */ 
 
@@ -34,6 +36,7 @@ export default class FortranTranslator{
         this.currentRule = '';
         this.currentChoice = 0;
         this.currentExpr = 0;
+        this.currentGroup = 0;
     }
 
     /**
@@ -82,7 +85,7 @@ export default class FortranTranslator{
                         : 'character(len=:), allocatable'
                     } :: expr_${i}_${j}`
                 })) ,
-                expr: node.expr.accept(this)
+            expr: node.expr.accept(this)
         });
         this.translatingStart = false;
         return ruleTranslation;
@@ -93,12 +96,15 @@ export default class FortranTranslator{
      * @this {Visitor}
     */
    visitOptions(node){
+        if(node.type === 'group') return;
         return Template.election({
             exprs: node.exprs.map((expr) =>{
                 const traslation = expr.accept(this)
                 this.currentChoice++; 
                 return traslation;
             }),
+            optionNumber: this.counterOptions++,
+            type: node.type
         });
    }
 
@@ -140,15 +146,16 @@ export default class FortranTranslator{
         this.currentExpr = 0;
 
         if(node.action) this.actions.push(node.action.accept(this));
-       
         return Template.union({
             exprs: node.exprs.map((expr) =>{
+                if(expr.labeledExpr.annotatedExpr && node.type == 'group') expr.labeledExpr.annotatedExpr.type = 'group';
                 const traslation = expr.accept(this);
-                if(expr instanceof CST.Pluck) this.currentExpr++;
+                if(expr instanceof CST.Pluck && node.type != 'group') this.currentExpr++;
+
                 return traslation
             }),
             startingRule: this.translatingStart,
-            resultExpr,
+            resultExpr: node.type != 'group' ? resultExpr : '',
         });
     }   
 
@@ -173,8 +180,9 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAnnotated(node){
-
+        console.log(node)
         if(node.qty && typeof node.qty === 'string'){ // +, *, ?
+
             if(node.expr instanceof CST.Identifier){
                 // TODO: Implement quantifiers (i.e., ?, *, +)
                 // expr_0_0 = peg_fizz()
@@ -193,7 +201,6 @@ export default class FortranTranslator{
                         number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
                     }
                     if(number1 && number2){
-                        console.log(number1, number2);
                         return Template.strExpr({
                             quantifier: 'min-max',
                             number_1: number1,
@@ -205,7 +212,6 @@ export default class FortranTranslator{
 
                 }  
             }else{
-                console.log(node.qty);
                 return Template.strExpr({
                     quantifier: node.qty,
                     expr: node.expr.accept(this),
@@ -213,12 +219,17 @@ export default class FortranTranslator{
                 });
             }
         }else{
+            if(node.expr instanceof CST.Group){
+                return node.expr.accept(this);
+            }
+
             if(node.expr instanceof CST.Identifier){
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
             }
             return Template.strExpr({
                 expr: node.expr.accept(this),
                 destination: getExprId(this.currentChoice, this.currentExpr),
+                type: node.type
             });
         }
     }
@@ -267,6 +278,21 @@ export default class FortranTranslator{
      */
     visitString(node) {
         return `acceptString('${node.val}')`;
+    }
+
+    /**
+     * @param {CST.Group} node
+     * @this {Visitor}
+     */
+    visitGroup(node) {
+        node.exprs.map((expr) => {
+            expr.type = 'group';
+        })
+        return Template.group({
+            exprs: node.exprs.map((expr) => expr.accept(this)),
+            destination: getExprId(this.currentChoice, this.currentExpr),
+            groupNumber: this.currentGroup++
+        })
     }
 
     /**

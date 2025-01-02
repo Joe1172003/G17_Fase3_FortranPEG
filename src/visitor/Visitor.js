@@ -162,6 +162,15 @@ export default class Visitor {
          * @param {Node} node
          * @returns {T}
          */
+        visitGroup(node){
+            throw new Error('Implement in subclass');
+        }
+	
+        /**
+         * @abstract
+         * @param {Node} node
+         * @returns {T}
+         */
         visitClase(node){
             throw new Error('Implement in subclass');
         }

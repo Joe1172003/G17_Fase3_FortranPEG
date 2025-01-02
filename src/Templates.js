@@ -200,7 +200,9 @@ export const rule = (data) => {
 /**
  *
  * @param {{
-*  exprs: string[]
+*  exprs: string[];
+*  optionNumber: number;
+*  type: string;
 * }} data
 * @returns
 */
@@ -228,13 +230,14 @@ export const election = (data) => `
 *  exprs: string[]
 *  startingRule: boolean
 *  resultExpr: string
+*  type?: string
 * }} data
 * @returns
 */
 export const union = (data) => `
     ${data.exprs.join('\n')}
     ${data.startingRule ? 'if (.not. acceptEOF()) cycle' : ''}
-    ${data.resultExpr}
+    ${data.type != 'group' ? `${data.resultExpr}` : ''}
 `;
 
 /**
@@ -245,26 +248,37 @@ export const union = (data) => `
 *  quantifier?: string;
 *  number_1?: number
 *  number_2?: number
+*  type?: string
 * }} data
 * @returns
 */
 export const strExpr = (data) => {
+    
     if (!data.quantifier){
         return `
-                lexemeStart = cursor
-                if(.not. ${data.expr}) cycle
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? 'lexemeStart = cursor': ''}
+                if(.not. ${data.expr}) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
         `;
     }
     switch (data.quantifier) {
         case '+':
             return `
                 lexemeStart = cursor
-                if (.not. ${data.expr}) cycle
+                if (.not. ${data.expr}) then
+                    cursor = cursor - 1
+                    cycle
+                end if
                 do while (.not. cursor > len(input))
-                    if (.not. ${data.expr}) exit
+                    if (.not. ${data.expr}) then
+                        cursor = cursor - 1
+                    exit
+                    end if
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case '*':
             return `
@@ -275,7 +289,7 @@ export const strExpr = (data) => {
                         exit
                     end if
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case '?':
             return `
@@ -283,7 +297,7 @@ export const strExpr = (data) => {
                 if (.not. ${data.expr}) then
                     cursor = cursor - 1
                 end if
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case 'min-max':
             return `
@@ -293,7 +307,7 @@ export const strExpr = (data) => {
                     j = j + 1
                 end do
                 if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `
         default:
             `'${data.quantifier}'`
@@ -349,6 +363,36 @@ export const action = (data) => {
     end function peg_${data.ruleId}_f${data.choice}
     `;
 };
+
+
+/**
+ * @jaguzaro
+ * @param {{
+ *  destination: string;
+ *  exprs: string[];
+ *  groupNumber: number;
+ * }} data
+ */
+export const group = (data) => {
+    return `
+    lexemeStart = cursor
+    do i_${data.groupNumber} = 0, ${data.exprs.length}
+        select case(i_${data.groupNumber})
+        ${data.exprs.map(
+            (expr, i) => `
+            case(${i})
+                cursor = savePoint
+                ${expr}
+                exit
+            `
+        )}
+        case default
+            exit
+        end select
+    end do
+    ${data.destination} = consumeInput()
+    `
+}
     
 
 
