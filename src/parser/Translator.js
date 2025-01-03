@@ -1,6 +1,6 @@
 import * as CST from '../visitor/CST.js';
 import * as Template from '../Templates.js';
-import {getActionId, getReturnType, getExprId, getRuleId} from './utils.js';
+import {getActionId, getReturnType, getExprId, getRuleId, getGroupId} from './utils.js';
 
 /**
  * @typedef {import('../visitor/Visitor.js').default<string>} Visitor
@@ -61,7 +61,6 @@ export default class FortranTranslator{
                 })
             })
         })
-        console.log(decArray)
 
         return Template.main({
             beforeContains: node.globalCode?.before ?? '',
@@ -91,9 +90,12 @@ export default class FortranTranslator{
             election.exprs.filter((expr) => expr instanceof CST.Pluck)
             .map((label, j)=>{
                 const expr = label.labeledExpr.annotatedExpr.expr;
+                console.log(this.actionReturnTypes, getReturnType(getGroupId(expr.id, 0), this.actionReturnTypes), this.actionReturnTypes)
                 return `${
                     expr instanceof CST.Identifier 
                     ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
+                    : expr instanceof CST.Group
+                    ? getReturnType(getGroupId(expr.id, 0), this.actionReturnTypes)
                     : 'character(len=:), allocatable'
                 } :: expr_${i}_${j}`
             }))
@@ -142,7 +144,6 @@ export default class FortranTranslator{
      */
 
     visitUnion(node){
-        
         const matchExprs = node.exprs.filter(
             (expr) => expr instanceof CST.Pluck
         );
@@ -173,7 +174,7 @@ export default class FortranTranslator{
         }
         this.currentExpr = 0;
 
-        if(node.action) this.actions.push(node.action.accept(this));
+        if(node.action && node.type != 'group') this.actions.push(node.action.accept(this));
         return Template.union({
             exprs: node.exprs.map((expr) =>{
                 if(expr.labeledExpr.annotatedExpr && node.type == 'group') expr.labeledExpr.annotatedExpr.type = 'group';
@@ -212,7 +213,6 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAnnotated(node){
-        console.log(node)
         if(node.qty && typeof node.qty === 'string'){ // +, *, ?
 
             if(node.expr instanceof CST.Identifier){
@@ -396,7 +396,7 @@ export default class FortranTranslator{
                         const fnId = `peg_group_f${this.currentGroup}_${index}`; 
                         const params = Object.keys(expr.action.params).map((label) =>
                             this.labelMap[label] || getExprId(this.currentChoice, this.currentExpr)
-                        );  
+                        );
                         this.actions.push(Template.action({
                             ruleId: `group_f${this.currentGroup}_${index}`,
                             choice: 0 ,
@@ -410,13 +410,11 @@ export default class FortranTranslator{
                             ),
                             code: expr.action.code
                         }));
+                        this.actionReturnTypes[fnId] = expr.action.returnType;
                         return {fnId, params};
                     }
                     return null;
-                });
-        
-        console.log("groupActions =>", groupActions);
-        
+                });        
         
         node.exprs.map((expr) => {
             expr.type = 'group';

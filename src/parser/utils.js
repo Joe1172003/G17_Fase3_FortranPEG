@@ -44,6 +44,7 @@ export function getActionId(ruleId, choice){
  * @returns
  */
 export function getReturnType(functionId, actionReturnTypes){
+    console.log(actionReturnTypes, functionId, actionReturnTypes[functionId])
     return actionReturnTypes[functionId] ?? 'character(len=:), allocatable';
 }
 
@@ -64,4 +65,14 @@ export function getExprId(choice, index){
  */
 export function getRuleId(rule) {
     return `peg_${rule}`;
+}
+
+/**
+ *
+ * @param {string} ruleId
+ * @param {number} choice
+ * @returns
+ */
+export function getGroupId(ruleId, choice){
+    return `peg_group_f${choice}_${choice}`;
 }
