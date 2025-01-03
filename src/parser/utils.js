@@ -44,7 +44,7 @@ export function getActionId(ruleId, choice){
  * @returns
  */
 export function getReturnType(functionId, actionReturnTypes){
-    console.log(actionReturnTypes, functionId, actionReturnTypes[functionId])
+    //console.log(actionReturnTypes, functionId, actionReturnTypes[functionId])
     return actionReturnTypes[functionId] ?? 'character(len=:), allocatable';
 }
 
