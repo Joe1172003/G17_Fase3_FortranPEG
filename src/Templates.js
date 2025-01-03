@@ -214,6 +214,7 @@ export const rule = (data) => {
         ${data.exprDeclarations.join('\n')}
         integer :: i
         integer :: j
+        integer :: temp_delimiter
         
 
         savePoint = cursor
@@ -357,6 +358,7 @@ export const strExpr = (data) => {
             return `
                 lexemeStart = cursor
                 j = 0
+                temp_delimiter = len(${data.delimiter_})
                 do while(cursor <= len(input))
                     if(j < 1)then
                         if(.not. ${data.expr})then
@@ -365,8 +367,8 @@ export const strExpr = (data) => {
                         end if
                         j = j + 1
                     else
-                        if(input(cursor:cursor) == ${data.delimiter_}) then
-                            cursor = cursor + 1
+                        if(input(cursor:cursor + temp_delimiter - 1) == ${data.delimiter_}) then
+                            cursor = cursor + temp_delimiter
                             if(${data.expr})then
                                 j = j + 1
                                 cycle
@@ -390,6 +392,7 @@ export const strExpr = (data) => {
             return `
                 lexemeStart = cursor
                 j = 0
+                temp_delimiter = len(${data.delimiter_})
                 do while(cursor <= len(input))
                     if(j < 1)then
                         if(.not. ${data.expr})then
@@ -398,8 +401,8 @@ export const strExpr = (data) => {
                         end if
                         j = j + 1
                     else
-                        if(input(cursor:cursor) == ${data.delimiter_}) then
-                            cursor = cursor + 1
+                        if(input(cursor:cursor + temp_delimiter - 1) == ${data.delimiter_}) then
+                            cursor = cursor + temp_delimiter
                             if(${data.expr})then
                                 j = j + 1
                                 cycle
