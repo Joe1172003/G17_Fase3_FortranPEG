@@ -541,7 +541,7 @@ export const group = (data) => {
         end select
     end do
     ${data.destination} = consumeInput()
-    ${data.exprs.map((expr, i) => `${data.destination} = ${data.action[i].fnId}(${data.destination}`)}
+    ${data.exprs.map((expr, i) => `${data.destination} = ${data.action[i].fnId}(${data.destination})`)}
     `
 }
     
