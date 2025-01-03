@@ -90,7 +90,7 @@ export default class FortranTranslator{
             election.exprs.filter((expr) => expr instanceof CST.Pluck)
             .map((label, j)=>{
                 const expr = label.labeledExpr.annotatedExpr.expr;
-                console.log(this.actionReturnTypes, getReturnType(getGroupId(expr.id, 0), this.actionReturnTypes), this.actionReturnTypes)
+                //console.log(this.actionReturnTypes, getReturnType(getGroupId(expr.id, 0), this.actionReturnTypes), this.actionReturnTypes)
                 return `${
                     expr instanceof CST.Identifier 
                     ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
@@ -115,7 +115,7 @@ export default class FortranTranslator{
             ),
             exprDeclarations: decArray,
             expr: node.expr.accept(this)
-        });        
+        });     
         this.translatingStart = false;
         return ruleTranslation;
     }
@@ -218,6 +218,7 @@ export default class FortranTranslator{
         if(node.qty && typeof node.qty === 'string'){ // +, *, ?
 
             if(node.expr instanceof CST.Identifier){
+               
                 // TODO: Implement quantifiers (i.e., ?, *, +)
                 // expr_0_0 = peg_fizz()
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
@@ -226,11 +227,9 @@ export default class FortranTranslator{
                 node.qty = node.qty.replace(/\|/g, '')
                 let number1, number2 = null;
                 let delimiter = null;
-
-                if(!node.qty.includes(',') && !node.qty.includes('..')){
-                    
-                    console.log(this.labelMap); 
-                    
+                const isDelimiter = /^(\d+|\d+\.\.\d+)\s*,\s*['"].*['"]$/;
+        
+                if(!node.qty.includes(',') && !node.qty.includes('..')){ 
                     const count = (!isNaN(parseInt(node.qty))) 
                         ? parseInt(node.qty)
                         : this.labelMap[node.qty]
@@ -241,16 +240,15 @@ export default class FortranTranslator{
                         expr: node.expr.accept(this),
                         destination: getExprId(this.currentChoice, this.currentExpr)
                     });
-                }else if(node.qty.split(',').length == 2){
-                    const parts = node.qty.split(',');
+                }else if(isDelimiter.test(node.qty)){
+                    const r_strtoArray = /\d+|['"][^'"]*['"]/g;
+                    const parts = node.qty.match(r_strtoArray);
                     number1, number2 = null;
-
-                    if(parts[0].includes('..')){
-                        const num = parts[0].split('..')
-                        delimiter = parts[1]
+                    if(parts.length === 3){
+                        delimiter = parts[2]
                        
-                        if(!isNaN(parseInt(num[0]))) number1 = parseInt(num[0])
-                        if(!isNaN(parseInt(num[1]))) number2 = parseInt(num[1])
+                        if(!isNaN(parseInt(parts[0]))) number1 = parseInt(parts[0])
+                        if(!isNaN(parseInt(parts[1]))) number2 = parseInt(parts[1])
                         
                         if(number1 && number2){
                             return Template.strExpr({
@@ -275,7 +273,7 @@ export default class FortranTranslator{
                     }
 
                 }else{
-                    number1, number2 = null;
+                    number1, number2 = null; // aqui deveria de entrar 
                     if(!isNaN(parseInt(node.qty.split(',')[0][0]))){
                        number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
                     }
@@ -331,6 +329,7 @@ export default class FortranTranslator{
             }
 
             if(node.expr instanceof CST.Identifier){
+                // aqui 
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
             }
             return Template.strExpr({
