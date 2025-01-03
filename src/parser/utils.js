@@ -77,3 +77,15 @@ export function getRuleId(rule) {
 export function getGroupId(ruleId, choice){
     return `peg_group_f${choice}_${choice}`;
 }
+
+/**
+ *
+ * @param {string} ruleId
+ * @param {number} choice
+ * @param {number} position
+ * @returns
+ */
+
+export function getCounterId(ruleId, choice, position){
+    return `peg_${ruleId}_f${choice}_${position}`;
+}

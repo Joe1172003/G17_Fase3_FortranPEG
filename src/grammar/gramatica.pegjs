@@ -108,16 +108,33 @@ match
   
 
 conteo = "|" _ qty:(numero / identificador / predicate) _ "|" {
-    if(! qty instanceof n.Predicate){
-      return text()
-    }else{
-      console.log(qty, 'enter here')
-      return qty
-    }
-  }
-        / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
-        / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
-        / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
+            if(! qty instanceof n.Predicate){
+              return {v1: text(), type: "text"}
+            }else{
+              return {v1: qty, type: "count"}
+            }
+          }
+        / "|" _ qty1:(numero / id:identificador / predicate)? _ ".." _ qty2:(numero / id2:identificador/predicate)? _ "|" {
+          if (qty1 instanceof n.Predicate && qty2 instanceof n.Predicate) {
+            return {v1: qty1, v2: qty2, type: "max_min"}
+          } else {
+            return {v1: text(), type: "text"}
+          }
+        }
+        / "|" _ qty:(numero / id:identificador / predicate)? _ "," _ del:opciones _ "|" {
+          if (qty instanceof n.Predicate) {
+            return {v1: qty, v2: del, type: "count_delimiter"}
+          } else {
+            return {v1: text(), type: "text"}
+          }
+        }
+        / "|" _ qty1:(numero / id:identificador / predicate)? _ ".." _ qty2:(numero / id2:identificador / predicate)? _ "," _ del:opciones _ "|" {
+          if (qty1 instanceof n.Predicate && qty2 instanceof n.Predicate) {
+            return {v1: qty1, v2: qty2, v3: del, type: "minMax_delimiter"}
+          } else {
+            return {v1: text(), type: "text"}
+          }
+        }
 
 predicate
   = _ symbol:("&"/"!")? _"{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {

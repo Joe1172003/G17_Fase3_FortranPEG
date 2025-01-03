@@ -1,6 +1,6 @@
 import * as CST from '../visitor/CST.js';
 import * as Template from '../Templates.js';
-import {getActionId, getReturnType, getExprId, getRuleId, getGroupId} from './utils.js';
+import {getActionId, getReturnType, getExprId, getRuleId, getGroupId, getCounterId} from './utils.js';
 
 /**
  * @typedef {import('../visitor/Visitor.js').default<string>} Visitor
@@ -93,12 +93,12 @@ export default class FortranTranslator{
         let result = Object.entries(this.actionReturnTypes).map(([rule, value]) => {
             return { [rule]: value };
         });
-
+        console.log(this.actionReturnTypes)
         let decArray = node.expr.exprs.flatMap((election, i) => 
             election.exprs.filter((expr) => expr instanceof CST.Pluck)
             .map((label, j)=>{
                 const expr = label.labeledExpr.annotatedExpr.expr;
-                //console.log(this.actionReturnTypes, getReturnType(getGroupId(expr.id, 0), this.actionReturnTypes), this.actionReturnTypes)
+                console.log(expr.id, i, getActionId(expr.id, i), getReturnType(getActionId(expr.id, i), this.actionReturnTypes))
                 return `${
                     expr instanceof CST.Identifier 
                     ? getReturnType(getActionId(expr.id, i), this.actionReturnTypes)
@@ -222,133 +222,226 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAnnotated(node){
-        console.log(node)
-        if(node.qty && (typeof node.qty === 'string' || node.qty instanceof CST.Predicate)){ // +, *, ?
-            if(node.qty instanceof CST.Predicate){
-                this.actions.push(
-                    Template.action({
-                        ruleId: this.currentRule,
-                        choice: this.currentChoice,
-                        signature: [],
-                        returnType: node.qty.returnType,
-                        paramDeclarations: [],
-                        code: node.qty.code
-                    })
-                )
-                return Template.strExpr({
-                    quantifier: 'only-count',
-                    number_1: `${getActionId(this.currentRule, this.currentChoice)}()`,
-                    expr: node.expr.accept(this),
-                    destination: getExprId(this.currentChoice, this.currentExpr),
-                    from: 'action'
-                });
-            }
-            
-            if(node.expr instanceof CST.Identifier){
-               
-                // TODO: Implement quantifiers (i.e., ?, *, +)
-                // expr_0_0 = peg_fizz()
-                return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
-            }
-            if(node.qty.length > 1){
-                node.qty = node.qty.replace(/\|/g, '')
-                let number1, number2 = null;
-                let delimiter = null;
-                const isDelimiter = /^(\d+|\d+\.\.\d+)\s*,\s*['"].*['"]$/;
+        if(node.qty){
+            if(node.qty.type != 'text'){
+                if (node.qty.v1 instanceof CST.Predicate){
+                    if (node.qty.type === "count") {
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v1.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v1.code,
+                                position: 0
+                            })
+                        )
+                        return Template.strExpr({
+                            quantifier: 'only-count',
+                            number_1: `${getCounterId(this.currentRule, this.currentChoice, 0)}()`,
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                            from: 'action',
+                            position: 0
+                        });
+                    } else if (node.qty.type === "max_min") {
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v1.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v1.code,
+                                position: 0
+                            })
+                        )
         
-                if(!node.qty.includes(',') && !node.qty.includes('..')){ 
-                    const count = (!isNaN(parseInt(node.qty))) 
-                        ? parseInt(node.qty)
-                        : this.labelMap[node.qty]
-
-                    return Template.strExpr({
-                        quantifier: 'only-count',
-                        number_1: count,
-                        expr: node.expr.accept(this),
-                        destination: getExprId(this.currentChoice, this.currentExpr)
-                    });
-                }else if(isDelimiter.test(node.qty)){
-                    const r_strtoArray = /\d+|['"][^'"]*['"]/g;
-                    const parts = node.qty.match(r_strtoArray);
-                    number1, number2 = null;
-                    if(parts.length === 3){
-                        delimiter = parts[2]
-                       
-                        if(!isNaN(parseInt(parts[0]))) number1 = parseInt(parts[0])
-                        if(!isNaN(parseInt(parts[1]))) number2 = parseInt(parts[1])
-                        
-                        if(number1 && number2){
-                            return Template.strExpr({
-                                quantifier: 'delimiter-minMax',
-                                number_1: number1,
-                                number_2: number2,
-                                delimiter_: delimiter,
-                                expr: node.expr.accept(this),
-                                destination: getExprId(this.currentChoice, this.currentExpr)
-                            });
-                        }
-                    }else{
-                        number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
-                        delimiter = parts[1]
-                            return Template.strExpr({
-                                quantifier: 'delimiter-count',
-                                number_1: number1,
-                                delimiter_: delimiter,
-                                expr: node.expr.accept(this),
-                                destination: getExprId(this.currentChoice, this.currentExpr)
-                            });
-                    }
-
-                }else{
-                    number1, number2 = null; // aqui deveria de entrar 
-                    if(!isNaN(parseInt(node.qty.split(',')[0][0]))){
-                       number1 = parseInt(node.qty.split(',')[0].split('..')[0]);
-                    }
-                    if(!isNaN(parseInt(node.qty.split(',')[0][node.qty.split(',')[0].length - 1]))){
-                        number2 = parseInt(node.qty.split(',')[0].split('..')[1]);
-                    }
-                    if(number1 && number2){
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v2.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v2.code,
+                                position: 1
+                            })
+                        )
                         return Template.strExpr({
                             quantifier: 'min-max',
-                            number_1: number1,
-                            number_2: number2,
+                            number_1: `${getCounterId(this.currentRule, this.currentChoice, 0)}()`,
+                            number_2: `${getCounterId(this.currentRule, this.currentChoice, 1)}()`,
+                            destination: getExprId(this.currentChoice, this.currentExpr),
                             expr: node.expr.accept(this),
-                            destination: getExprId(this.currentChoice, this.currentExpr) 
+                            from: 'action',
                         })
-                    }else if(number1){
-                        if(number1 === 0){
+                    } else if (node.qty.type === "count_delimiter") {
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v1.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v1.code,
+                                position: 0
+                            })
+                        )   
+                        return Template.strExpr({
+                            quantifier: 'delimiter-count',
+                            number_1: `${getCounterId(this.currentRule, this.currentChoice, 0)}()`,
+                            expr: node.expr.accept(this),
+                            delimiter_: `\"${node.qty.v2.exprs[0].exprs[0].labeledExpr.annotatedExpr.expr.val}\"`,
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                            from: 'action',
+                            position: 0
+                        });
+                        
+                    } else if (node.qty.type === "minMax_delimiter") {
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v1.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v1.code,
+                                position: 0
+                            })
+                        )
+        
+                        this.actions.push(
+                            Template.action_counter({
+                                ruleId: this.currentRule,
+                                choice: this.currentChoice,
+                                signature: [],
+                                returnType: node.qty.v2.returnType,
+                                paramDeclarations: [],
+                                code: node.qty.v2.code,
+                                position: 1
+                            })
+                        )
+                        return Template.strExpr({
+                            quantifier: 'delimiter-minMax',
+                            number_1: `${getCounterId(this.currentRule, this.currentChoice, 0)}()`,
+                            number_2: `${getCounterId(this.currentRule, this.currentChoice, 1)}()`,
+                            delimiter_: `\"${node.qty.v3.exprs[0].exprs[0].labeledExpr.annotatedExpr.expr.val}\"`,
+                            destination: getExprId(this.currentChoice, this.currentExpr),
+                            expr: node.expr.accept(this),
+                            from: 'action',
+                        })
+                        
+                    }
+        
+                }
+                
+                if(node.expr instanceof CST.Identifier){
+                    return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
+                }
+                
+            }else{
+                if(node.qty.v1.length > 1){
+                    node.qty.v1 = node.qty.v1.replace(/\|/g, '')
+                    let number1, number2 = null;
+                    let delimiter = null;
+                    const isDelimiter = /^(\d+|\d+\.\.\d+)\s*,\s*['"].*['"]$/;
+            
+                    if(!node.qty.v1.includes(',') && !node.qty.v1.includes('..')){ 
+                        const count = (!isNaN(parseInt(node.qty.v1))) 
+                            ? parseInt(node.qty.v1)
+                            : this.labelMap[node.qty.v1]
+    
+                        return Template.strExpr({
+                            quantifier: 'only-count',
+                            number_1: count,
+                            expr: node.expr.accept(this),
+                            destination: getExprId(this.currentChoice, this.currentExpr)
+                        });
+                    }else if(isDelimiter.test(node.qty.v1)){
+                        const r_strtoArray = /\d+|['"][^'"]*['"]/g;
+                        const parts = node.qty.v1.match(r_strtoArray);
+                        number1, number2 = null;
+                        if(parts.length === 3){
+                            delimiter = parts[2]
+                           
+                            if(!isNaN(parseInt(parts[0]))) number1 = parseInt(parts[0])
+                            if(!isNaN(parseInt(parts[1]))) number2 = parseInt(parts[1])
+                            
+                            if(number1 && number2){
+                                return Template.strExpr({
+                                    quantifier: 'delimiter-minMax',
+                                    number_1: number1,
+                                    number_2: number2,
+                                    delimiter_: delimiter,
+                                    expr: node.expr.accept(this),
+                                    destination: getExprId(this.currentChoice, this.currentExpr)
+                                });
+                            }
+                        }else{
+                            number1 = (!isNaN(parseInt(parts[0]))) ? parseInt(parts[0]) : parts[0]
+                            delimiter = parts[1]
+                                return Template.strExpr({
+                                    quantifier: 'delimiter-count',
+                                    number_1: number1,
+                                    delimiter_: delimiter,
+                                    expr: node.expr.accept(this),
+                                    destination: getExprId(this.currentChoice, this.currentExpr)
+                                });
+                        }
+    
+                    }else{
+                        number1, number2 = null; // aqui deveria de entrar 
+                        if(!isNaN(parseInt(node.qty.v1.split(',')[0][0]))){
+                           number1 = parseInt(node.qty.v1.split(',')[0].split('..')[0]);
+                        }
+                        if(!isNaN(parseInt(node.qty.v1.split(',')[0][node.qty.v1.split(',')[0].length - 1]))){
+                            number2 = parseInt(node.qty.v1.split(',')[0].split('..')[1]);
+                        }
+                        if(number1 && number2){
+                            return Template.strExpr({
+                                quantifier: 'min-max',
+                                number_1: number1,
+                                number_2: number2,
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr) 
+                            })
+                        }else if(number1){
+                            if(number1 === 0){
+                                return Template.strExpr({
+                                    quantifier: "*",
+                                    expr: node.expr.accept(this),
+                                    destination: getExprId(this.currentChoice, this.currentExpr),
+                                }); 
+                            }
+                            return Template.strExpr({
+                                quantifier: "+",
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr),
+                            }); 
+                        }else if(number2){
+                            return Template.strExpr({
+                                quantifier: "?",
+                                expr: node.expr.accept(this),
+                                destination: getExprId(this.currentChoice, this.currentExpr),
+                            }); 
+                        }else{
                             return Template.strExpr({
                                 quantifier: "*",
                                 expr: node.expr.accept(this),
                                 destination: getExprId(this.currentChoice, this.currentExpr),
                             }); 
-                        }
-                        return Template.strExpr({
-                            quantifier: "+",
-                            expr: node.expr.accept(this),
-                            destination: getExprId(this.currentChoice, this.currentExpr),
-                        }); 
-                    }else if(number2){
-                        return Template.strExpr({
-                            quantifier: "?",
-                            expr: node.expr.accept(this),
-                            destination: getExprId(this.currentChoice, this.currentExpr),
-                        }); 
-                    }else{
-                        return Template.strExpr({
-                            quantifier: "*",
-                            expr: node.expr.accept(this),
-                            destination: getExprId(this.currentChoice, this.currentExpr),
-                        }); 
-                    }     
-
-                }  
-            }else{
-                return Template.strExpr({
-                    quantifier: node.qty,
-                    expr: node.expr.accept(this),
-                    destination: getExprId(this.currentChoice, this.currentExpr),
-                });
+                        }     
+    
+                    }  
+                }else{
+                    return Template.strExpr({
+                        quantifier: node.qty.v1,
+                        expr: node.expr.accept(this),
+                        destination: getExprId(this.currentChoice, this.currentExpr),
+                    });
+                }
             }
         }else{
             if(node.expr instanceof CST.Group){
@@ -356,7 +449,6 @@ export default class FortranTranslator{
             }
 
             if(node.expr instanceof CST.Identifier){
-                // aqui 
                 return `${getExprId(this.currentChoice, this.currentExpr)} = ${node.expr.accept(this)}`;
             }
             return Template.strExpr({
@@ -429,7 +521,7 @@ export default class FortranTranslator{
         const groupActions = node.exprs
                 .map((expr, index) =>{
                     if(expr instanceof CST.Union && expr.action){
-                        const fnId = `peg_group_f${this.currentGroup}_${index}`; 
+                        const fnId = `peg_group_f${this.currentGroup}`; 
                         const params = Object.keys(expr.action.params).map((label) =>
                             this.labelMap[label] || getExprId(this.currentChoice, this.currentExpr)
                         );

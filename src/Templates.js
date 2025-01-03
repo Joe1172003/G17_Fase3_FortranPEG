@@ -217,6 +217,7 @@ export const rule = (data) => {
         character(len=:), allocatable :: tmpAssertion
         integer :: temp_delimiter
         integer :: tempCounter
+        integer :: tempCounter2
     
         savePoint = cursor
         ${data.expr}
@@ -360,7 +361,9 @@ export const strExpr = (data) => {
                     end if 
                     j = j + 1
                 end do
-                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
+                ${data.from == 'action' ? `tempCounter = ${data.number_1}` : ''}
+                ${data.from == 'action' ? `tempCounter2 = ${data.number_2}` : ''}
+                if(.not. (j >= ${data.from != 'action' ? data.number_1 : 'tempCounter'} .and. j <= ${data.from != 'action' ? data.number_1 : 'tempCounter2'})) cycle
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `
         case 'delimiter-minMax':
@@ -390,10 +393,10 @@ export const strExpr = (data) => {
                         end if
                     end if
                 end do
-        
-                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) then
-                    cycle
-                end if
+                
+                ${data.from == 'action' ? `tempCounter = ${data.number_1}` : ''}
+                ${data.from == 'action' ? `tempCounter2 = ${data.number_2}` : ''}
+                if(.not. (j >= ${data.from != 'action' ? data.number_1 : 'tempCounter'} .and. j <= ${data.from != 'action' ? data.number_1 : 'tempCounter2'})) cycle
 
                 ${data.destination} = consumeInput()
             `
@@ -425,7 +428,8 @@ export const strExpr = (data) => {
                     end if
                 end do
 
-                if(.not. (j == ${data.number_1})) then
+                ${data.from == 'action' ? `tempCounter = ${data.number_1}` : ''}
+                if(.not. (j == ${data.from != 'action' ? data.number_1 : 'tempCounter'})) then
                     cycle
                 end if
 
@@ -546,6 +550,28 @@ export const group = (data) => {
 }
     
 
-
+/**
+ *
+ * @param {{
+*  ruleId: string;
+*  choice: number
+*  signature: string[];
+*  returnType: string;
+*  paramDeclarations: string[];
+*  code: string;
+*  position: number
+* }} data
+* @returns
+*/
+export const action_counter = (data) => {
+    const signature = data.signature.join(', ');
+    return `
+    function peg_${data.ruleId}_f${data.choice}_${data.position}(${signature}) result(res)
+        ${data.paramDeclarations.join('\n')}
+        ${data.returnType} :: res
+        ${data.code}
+    end function peg_${data.ruleId}_f${data.choice}_${data.position}
+    `;
+};
 
 
