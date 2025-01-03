@@ -82,8 +82,8 @@ label
   }
 
 annotated
-  = text:"$"? _ expr:match _ qty:$([?+*]/conteo)? {
- 
+  = text:"$"? _ expr:match _ qty:([?+*]/conteo)? {
+    console.log(qty, 'qty')
     return new n.Annotated(expr, qty, text ? true : false);
   }
 
@@ -107,7 +107,14 @@ match
   }
   
 
-conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text()}
+conteo = "|" _ qty:(numero / identificador / predicate) _ "|" {
+    if(! qty instanceof n.Predicate){
+      return text()
+    }else{
+      console.log(qty, 'enter here')
+      return qty
+    }
+  }
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
         / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"

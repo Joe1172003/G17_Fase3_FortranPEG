@@ -2,8 +2,6 @@
 //
 // https://peggyjs.org/
 
-"use strict";
-
 
 
     import { ids, usos} from '../../index.js'
@@ -336,7 +334,7 @@ function peg$parse(input, options) {
     return new n.Label(expr, label);
   };
   var peg$f10 = function(text, expr, qty) {
- 
+    console.log(qty, 'qty')
     return new n.Annotated(expr, qty, text ? true : false);
   };
   var peg$f11 = function(id) {
@@ -356,7 +354,14 @@ function peg$parse(input, options) {
   var peg$f15 = function() {
     return new n.Dot();
   };
-  var peg$f16 = function(qty) {console.log(qty); return text()};
+  var peg$f16 = function(qty) {
+    if(! qty instanceof n.Predicate){
+      return text()
+    }else{
+      console.log(qty, 'enter here')
+      return qty
+    }
+  };
   var peg$f17 = function(symbol, returnType, code) {
     return new n.Predicate(returnType, code, symbol, {})
   };
@@ -1124,7 +1129,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseannotated() {
-    var s0, s1, s2, s3, s4, s5, s6;
+    var s0, s1, s2, s3, s4, s5;
 
     s0 = peg$currPos;
     if (input.charCodeAt(peg$currPos) === 36) {
@@ -1141,21 +1146,19 @@ function peg$parse(input, options) {
     s3 = peg$parsematch();
     if (s3 !== peg$FAILED) {
       s4 = peg$parse_();
-      s5 = peg$currPos;
-      s6 = input.charAt(peg$currPos);
-      if (peg$r2.test(s6)) {
+      s5 = input.charAt(peg$currPos);
+      if (peg$r2.test(s5)) {
         peg$currPos++;
       } else {
-        s6 = peg$FAILED;
+        s5 = peg$FAILED;
         if (peg$silentFails === 0) { peg$fail(peg$e15); }
       }
-      if (s6 === peg$FAILED) {
-        s6 = peg$parseconteo();
+      if (s5 === peg$FAILED) {
+        s5 = peg$parseconteo();
       }
-      if (s6 === peg$FAILED) {
-        s6 = null;
+      if (s5 === peg$FAILED) {
+        s5 = null;
       }
-      s5 = input.substring(s5, peg$currPos);
       peg$savedPos = s0;
       s0 = peg$f10(s1, s3, s5);
     } else {
@@ -1296,6 +1299,9 @@ function peg$parse(input, options) {
       s3 = peg$parsenumero();
       if (s3 === peg$FAILED) {
         s3 = peg$parseidentificador();
+        if (s3 === peg$FAILED) {
+          s3 = peg$parsepredicate();
+        }
       }
       if (s3 !== peg$FAILED) {
         s4 = peg$parse_();

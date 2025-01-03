@@ -216,6 +216,7 @@ export const rule = (data) => {
         integer :: j
         character(len=:), allocatable :: tmpAssertion
         integer :: temp_delimiter
+        integer :: tempCounter
     
         savePoint = cursor
         ${data.expr}
@@ -280,6 +281,7 @@ export const union = (data) => `
 *  number_2?: number
 *  type?: string
 *  delimiter_?: string
+*  from?: string
 * }} data
 * @returns
 */
@@ -341,7 +343,8 @@ export const strExpr = (data) => {
                     end if
                     j = j + 1
                 end do
-                if(j /= ${data.number_1}) cycle
+                ${data.from == 'action' ? `tempCounter = ${data.number_1}` : ''}
+                if(j /= ${data.from != 'action' ? data.number_1 : 'tempCounter'}) cycle
                 ${data.destination} = consumeInput()
             `
         case 'min-max':

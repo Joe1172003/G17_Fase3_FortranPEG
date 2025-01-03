@@ -93,11 +93,6 @@ export default class FortranTranslator{
         let result = Object.entries(this.actionReturnTypes).map(([rule, value]) => {
             return { [rule]: value };
         });
-        console.log(node)
-        console.log(result)
-        console.log(this.actionReturnTypes)
-        console.log(returnType)
-
 
         let decArray = node.expr.exprs.flatMap((election, i) => 
             election.exprs.filter((expr) => expr instanceof CST.Pluck)
@@ -227,8 +222,28 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAnnotated(node){
-        if(node.qty && typeof node.qty === 'string'){ // +, *, ?
-
+        console.log(node)
+        if(node.qty && (typeof node.qty === 'string' || node.qty instanceof CST.Predicate)){ // +, *, ?
+            if(node.qty instanceof CST.Predicate){
+                this.actions.push(
+                    Template.action({
+                        ruleId: this.currentRule,
+                        choice: this.currentChoice,
+                        signature: [],
+                        returnType: node.qty.returnType,
+                        paramDeclarations: [],
+                        code: node.qty.code
+                    })
+                )
+                return Template.strExpr({
+                    quantifier: 'only-count',
+                    number_1: `${getActionId(this.currentRule, this.currentChoice)}()`,
+                    expr: node.expr.accept(this),
+                    destination: getExprId(this.currentChoice, this.currentExpr),
+                    from: 'action'
+                });
+            }
+            
             if(node.expr instanceof CST.Identifier){
                
                 // TODO: Implement quantifiers (i.e., ?, *, +)
