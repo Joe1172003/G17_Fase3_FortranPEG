@@ -23,7 +23,7 @@ gramatica
   }
 
 globalCode
-  = "{" _before:$(. !"contains")* [ \t\n\r]* "contains" [ \t\n\r]* after:$[^}]* "}"{
+  = "{" _ before:$(. !"contains")* [ \t\n\r]* "contains" [ \t\n\r]* after:$[^}]* "}"{
     return after ? {before, after} : {before}
   }
 

@@ -481,6 +481,29 @@ export const action = (data) => {
     `;
 };
 
+/**
+ *
+ * @param {{
+*  ruleId: string;
+*  choice: number
+*  signature: string[];
+*  returnType: string;
+*  paramDeclarations: string[];
+*  code: string;
+* }} data
+* @returns
+*/
+export const action_group = (data) => {
+    const signature = data.signature.join(', ');
+    return `
+    function peg_${data.ruleId}_f${data.choice}(${signature}) result(res)
+        ${data.paramDeclarations.join('\n')}
+        ${data.returnType} :: res
+        ${data.code}
+    end function peg_${data.ruleId}_f${data.choice}
+    `;
+}
+
 
 /**
  * @jaguzaro
@@ -504,7 +527,7 @@ export const group = (data) => {
                 ${expr}
                 ${
                 data.action && data.action[i]
-                ? `res = ${data.action[i].fnId}(${data.action[i].params})`: ''}
+                ? `! res = ${data.action[i].fnId}(${data.action[i].params})`: ''}
                 exit
             `   
         ).join('')}
@@ -513,6 +536,7 @@ export const group = (data) => {
         end select
     end do
     ${data.destination} = consumeInput()
+    ${data.exprs.map((expr, i) => `${data.destination} = ${data.action[i].fnId}(${data.destination}`)}
     `
 }
     

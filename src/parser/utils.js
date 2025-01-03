@@ -9,7 +9,7 @@ import FortranTranslator from './Translator.js';
  * 
  */
 
-export function generateParser(cst) {
+export async function generateParser(cst) {
     /** @type {ActionTypes} */
     const ruleReturnTypes = {};
     for( const rule of cst.rules){
@@ -23,7 +23,8 @@ export function generateParser(cst) {
 
     /** @type {Visitor) */
     const translator = new FortranTranslator(ruleReturnTypes);
-    return cst.accept(translator)
+    const result = await cst.accept(translator)
+    return result
 }
 
 /**

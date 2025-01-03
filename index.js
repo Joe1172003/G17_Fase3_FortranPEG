@@ -26,30 +26,40 @@ const salida = monaco.editor.create(document.getElementById('salida'), {
 
 let decorations = [];
 
-// Analizar contenido del editor
-const analizar = () => {
+const analizar = async () => {
     const entrada = editor.getValue();
     ids.length = 0;
     usos.length = 0;
     errores.length = 0;
 
+    try {
         const cst = parse(entrada);
         if (errores.length > 0) {
             salida.setValue(`Error: ${errores[0].message}`);
             return;
-        } else {           
-            const fileContents = generateParser(cst);
-            const blob = new Blob([fileContents], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const button = document.getElementById('ButtomDownload');
-            button.href = url;
-            salida.setValue(fileContents);
         }
 
-        // salida.setValue("Análisis Exitoso");
+        // Llamada asincrónica a `generateParser`
+        const fileContents = await generateParser(cst);
+        const blob = new Blob([fileContents], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+
+        // Configurar el botón de descarga
+        const button = document.getElementById('ButtomDownload');
+        button.href = url;
+
+        // Mostrar el contenido generado en la salida
+        salida.setValue(fileContents);
+    } catch (error) {
+        // Manejo de errores
+        salida.setValue(`Error durante el análisis: ${error.message}`);
+        console.error(error);
+    } finally {
         // Limpiar decoraciones previas si la validación es exitosa
-        decorations = editor.deltaDecorations(decorations, []); 
+        decorations = editor.deltaDecorations(decorations, []);
+    }
 };
+
 
 // Escuchar cambios en el contenido del editor
 editor.onDidChangeModelContent(() => {
