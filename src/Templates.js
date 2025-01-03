@@ -214,9 +214,9 @@ export const rule = (data) => {
         ${data.exprDeclarations.join('\n')}
         integer :: i
         integer :: j
+        character(len=:), allocatable :: tmpAssertion
         integer :: temp_delimiter
-        
-
+    
         savePoint = cursor
         ${data.expr}
     end function peg_${data.id}
@@ -257,12 +257,16 @@ export const election = (data) => `
 *  startingRule: boolean
 *  resultExpr: string
 *  type?: string
+*  positive: boolean
+*  negative: boolean
 * }} data
 * @returns
 */
 export const union = (data) => `
     ${data.exprs.join('\n')}
     ${data.startingRule ? 'if (.not. acceptEOF()) cycle' : ''}
+    ${data.positive ? "if (.not. res) cycle" : ""}
+    ${data.negative ? "if (res) cycle" : ""}
     ${data.type != 'group' ? `${data.resultExpr}` : ''}
 `;
 
@@ -425,6 +429,9 @@ export const strExpr = (data) => {
     }
 };
 
+export const strExprPositive = (data) => `if (.not. ${data.expr}) cycle`;
+
+export const strExprNegative = (data) => `if (${data.expr}) cycle`;
 
 /**
  *

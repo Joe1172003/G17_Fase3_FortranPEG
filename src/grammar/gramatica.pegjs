@@ -56,13 +56,12 @@ union
     return new n.Union(exprs, action);
   }
 
-    
 parsingExpression
   = pluck 
-  / "!" assertion:(match/predicate){
+  / "!" assertion:(match){
     return new n.NegAssertion(assertion);
   }
-  / "&" assertion:(match/predicate){
+  / "&" assertion:(match){
     return new n.Assertion(assertion);
   }
   / "!." {
@@ -114,8 +113,8 @@ conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
 
 predicate
-  = "{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {
-    return new n.Predicate(returnType, code, {})
+  = _ symbol:("&"/"!")? _"{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {
+    return new n.Predicate(returnType, code, symbol, {})
   }
 
 predicateReturnType
