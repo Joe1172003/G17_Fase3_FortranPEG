@@ -92,7 +92,6 @@ export class Options {
  */
 export class Union {
     /**
-     *
      * @param {Node[]} exprs
 	 * @param {Predicate=} action
      * @param {string} type

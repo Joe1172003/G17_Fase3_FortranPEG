@@ -40,6 +40,7 @@ export default class FortranTranslator{
         this.currentExpr = 0;
         this.currentGroup = 0;
         this.groupsVariables = []
+        this.labelMap = {}
     }
 
     /**
@@ -199,6 +200,10 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitLabel(node){
+        if(node.label){
+            const varName = getExprId(this.currentChoice, this.currentExpr);
+            this.labelMap[node.label] = varName;
+        }
         return node.annotatedExpr.accept(this);
     }
 
@@ -312,7 +317,34 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitGroup(node) {
-        console.log("node action",node.action);
+        const groupActions = node.exprs
+                .map((expr, index) =>{
+                    if(expr instanceof CST.Union && expr.action){
+                        const fnId = `peg_group_f${this.currentGroup}_${index}`; 
+                        const params = Object.keys(expr.action.params).map((label) =>
+                            this.labelMap[label] || getExprId(this.currentChoice, this.currentExpr)
+                        );  
+                        this.actions.push(Template.action({
+                            ruleId: `group_f${this.currentGroup}_${index}`,
+                            choice: 0 ,
+                            signature: Object.keys(expr.action.params),
+                            returnType: expr.action.returnType,
+                            paramDeclarations: Object.entries(expr.action.params).map(
+                                ([label, ruleId]) =>{
+                                    `${getReturnType(getExprId(ruleId, this.currentChoice),
+                                        this.actionReturnTypes)} :: ${label}`
+                                }
+                            ),
+                            code: expr.action.code
+                        }));
+                        return {fnId, params};
+                    }
+                    return null;
+                });
+        
+        console.log("groupActions =>", groupActions);
+        
+        
         node.exprs.map((expr) => {
             expr.type = 'group';
         })
@@ -320,7 +352,8 @@ export default class FortranTranslator{
         return Template.group({
             exprs: node.exprs.map((expr) => expr.accept(this)),
             destination: getExprId(this.currentChoice, this.currentExpr),
-            groupNumber: this.currentGroup++
+            groupNumber: this.currentGroup++,
+            action: groupActions
         })  
     }
 

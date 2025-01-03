@@ -374,6 +374,7 @@ export const action = (data) => {
  *  destination: string;
  *  exprs: string[];
  *  groupNumber: number;
+ *  action?: string[]; 
  * }} data
  */
 export const group = (data) => {
@@ -387,8 +388,11 @@ export const group = (data) => {
             case(${i})
                 cursor = savePoint${data.groupNumber}
                 ${expr}
+                ${
+                data.action && data.action[i]
+                ? `res = ${data.action[i].fnId}(${data.action[i].params})`: ''}
                 exit
-            `
+            `   
         ).join('')}
         case default
             exit
