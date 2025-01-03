@@ -59,17 +59,27 @@ module parser
 
     ${data.actions.join('\n')}
 
-    function acceptString(str) result(accept)
+    function acceptString(str, isCase) result(accept)
         character(len=*) :: str
+        logical, intent(in) :: isCase
         logical :: accept
         integer :: offset
 
         offset = len(str) - 1
-        if (str /= input(cursor:cursor + offset)) then
-            accept = .false.
-            cursor = cursor + 1
-            return
+        if (isCase) then
+            if (str /= to_lower(input(cursor:cursor + offset))) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
+        else
+            if (str /= input(cursor:cursor + offset)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
         end if
+
         cursor = cursor + len(str)
         accept = .true.
     end function acceptString
