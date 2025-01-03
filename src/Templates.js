@@ -204,7 +204,7 @@ export const rule = (data) => {
         ${data.exprDeclarations.join('\n')}
         integer :: i
         integer :: j
-        j = 0
+        
 
         savePoint = cursor
         ${data.expr}
@@ -264,6 +264,7 @@ export const union = (data) => `
 *  number_1?: number
 *  number_2?: number
 *  type?: string
+*  delimiter_?: string
 * }} data
 * @returns
 */
@@ -290,8 +291,8 @@ export const strExpr = (data) => {
                 do while (.not. cursor > len(input))
                     if (.not. ${data.expr}) then
                         cursor = cursor - 1
-                    exit
-                    end if
+                        exit
+                    end if 
                 end do
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
@@ -314,19 +315,100 @@ export const strExpr = (data) => {
                 end if
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
+        case 'only-count':
+            return `
+                lexemeStart = cursor
+                j = 0
+                do while(cursor <= len(input))
+                    if(.not. ${data.expr}) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                    j = j + 1
+                end do
+                if(j /= ${data.number_1}) cycle
+                ${data.destination} = consumeInput()
+            `
         case 'min-max':
             return `
                 lexemeStart = cursor
+                j = 0
                 do while (cursor <= len(input))
-                    if (.not. ${data.expr}) exit
+                    if (.not. ${data.expr}) then
+                        cursor = cursor - 1
+                        exit
+                    end if 
                     j = j + 1
                 end do
                 if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `
-        default:
-            `'${data.quantifier}'`
-            
+        case 'delimiter-minMax':
+            return `
+                lexemeStart = cursor
+                j = 0
+                do while(cursor <= len(input))
+                    if(j < 1)then
+                        if(.not. ${data.expr})then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    else
+                        if(input(cursor:cursor) == ${data.delimiter_}) then
+                            cursor = cursor + 1
+                            if(${data.expr})then
+                                j = j + 1
+                                cycle
+                            else
+                                cursor = cursor - 2
+                                exit
+                            end if
+                        else
+                            exit
+                        end if
+                    end if
+                end do
+        
+                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) then
+                    cycle
+                end if
+
+                ${data.destination} = consumeInput()
+            `
+        case 'delimiter-count':
+            return `
+                lexemeStart = cursor
+                j = 0
+                do while(cursor <= len(input))
+                    if(j < 1)then
+                        if(.not. ${data.expr})then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    else
+                        if(input(cursor:cursor) == ${data.delimiter_}) then
+                            cursor = cursor + 1
+                            if(${data.expr})then
+                                j = j + 1
+                                cycle
+                            else
+                                cursor = cursor - 2
+                                exit
+                            end if
+                        else
+                            exit
+                        end if
+                    end if
+                end do
+
+                if(.not. (j == ${data.number_1})) then
+                    cycle
+                end if
+
+                ${data.destination} = consumeInput()
+            `    
     }
 };
 
