@@ -184,6 +184,8 @@ export default class FortranTranslator{
                 return traslation
             }),
             startingRule: this.translatingStart,
+            positive: node.action?.params === "&",
+            negative: node.action?.params === "!",
             resultExpr: node.type != 'group' ? resultExpr : '',
         });
     }   
@@ -344,7 +346,11 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitAssertion(node) {
-        return `if (.not. ${node.assertion.accept(this)}) cycle`;
+        if (node.assertion instanceof CST.Identifier) {
+            return `tmpAssertion = ${node.assertion.accept(this)}`;
+        } else {
+            return Template.strExprPositive({expr: node.assertion.accept(this)});
+        }
     }
 
     /**
@@ -352,7 +358,11 @@ export default class FortranTranslator{
      * @this {Visitor}
      */
     visitNegAssertion(node) {
-        return `if (${node.assertion.accept(this)}) cycle`;
+        if (node.assertion instanceof CST.Identifier) {
+            return `tmpAssertion = ${node.assertion.accept(this)}`;
+        } else {
+            return Template.strExprNegative({expr: node.assertion.accept(this)});
+        }
     }
 
     /**
