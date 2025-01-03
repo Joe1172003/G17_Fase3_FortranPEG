@@ -9,7 +9,7 @@ import FortranTranslator from './Translator.js';
  * 
  */
 
-export function generateParser(cst) {
+export async function generateParser(cst) {
     /** @type {ActionTypes} */
     const ruleReturnTypes = {};
     for( const rule of cst.rules){
@@ -23,7 +23,8 @@ export function generateParser(cst) {
 
     /** @type {Visitor) */
     const translator = new FortranTranslator(ruleReturnTypes);
-    return cst.accept(translator)
+    const result = await cst.accept(translator)
+    return result
 }
 
 /**
@@ -44,6 +45,7 @@ export function getActionId(ruleId, choice){
  * @returns
  */
 export function getReturnType(functionId, actionReturnTypes){
+    //console.log(actionReturnTypes, functionId, actionReturnTypes[functionId])
     return actionReturnTypes[functionId] ?? 'character(len=:), allocatable';
 }
 
@@ -64,4 +66,14 @@ export function getExprId(choice, index){
  */
 export function getRuleId(rule) {
     return `peg_${rule}`;
+}
+
+/**
+ *
+ * @param {string} ruleId
+ * @param {number} choice
+ * @returns
+ */
+export function getGroupId(ruleId, choice){
+    return `peg_group_f${choice}_${choice}`;
 }

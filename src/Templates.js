@@ -7,6 +7,7 @@
 *  startingRuleType: string;
 *  rules: string[];
 *  actions: string[];
+*  globalDeclarations: string[];
 * }} data
 * @returns {string}
 */
@@ -16,6 +17,7 @@ module parser
     implicit none
     character(len=:), allocatable, private :: input
     integer, private :: savePoint, lexemeStart, cursor
+    ${data.globalDeclarations.join('\n')}
 
     interface toStr
         module procedure intToStr
@@ -25,6 +27,21 @@ module parser
     ${data.beforeContains}
 
     contains
+
+    function to_lower(strIn) result(strOut)
+        character(len=*), intent(in) :: strIn
+        character(len=len(strIn)) :: strOut
+        integer :: i, j
+
+        do i = 1, len(strIn)
+            j = iachar(strIn(i:i))
+            if (j >= iachar("A") .and. j <= iachar("Z")) then
+                strOut(i:i) = achar(iachar(strIn(i:i)) + 32)
+            else 
+                strOut(i:i) = strIn(i:i)
+            end if
+        end do
+    end function to_lower
 
     ${data.afterContains}
 
@@ -42,45 +59,74 @@ module parser
 
     ${data.actions.join('\n')}
 
-    function acceptString(str) result(accept)
+    function acceptString(str, isCase) result(accept)
         character(len=*) :: str
+        logical, intent(in) :: isCase
         logical :: accept
         integer :: offset
 
         offset = len(str) - 1
-        if (str /= input(cursor:cursor + offset)) then
-            accept = .false.
-            cursor = cursor + 1
-            return
+        if (isCase) then
+            if (str /= to_lower(input(cursor:cursor + offset))) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
+        else
+            if (str /= input(cursor:cursor + offset)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
         end if
+
         cursor = cursor + len(str)
         accept = .true.
     end function acceptString
 
 
-    function acceptRange(bottom, top) result(accept)
+    function acceptRange(bottom, top, isCase) result(accept)
         character(len=1) :: bottom, top
+        logical, intent(in) :: isCase
         logical :: accept
 
-        if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
-            accept = .false.
-            cursor = cursor + 1
-            return
+        if (isCase) then
+            if(.not. (to_lower(input(cursor:cursor)) >= bottom .and. to_lower(input(cursor:cursor)) <= top)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
+        else
+            if(.not. (input(cursor:cursor) >= bottom .and. input(cursor:cursor) <= top)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
         end if
+
         cursor = cursor + 1
         accept = .true.
     end function acceptRange
 
-
-    function acceptSet(set) result(accept)
+    function acceptSet(set, isCase) result(accept)
         character(len=1), dimension(:) :: set
+        logical, intent(in) :: isCase
         logical :: accept
 
-        if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
-            accept = .false.
-            cursor = cursor + 1
-            return
+        if (isCase) then
+            if(.not. (findloc(set, to_lower(input(cursor:cursor)), 1) > 0)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
+        else
+            if(.not. (findloc(set, input(cursor:cursor), 1) > 0)) then
+                accept = .false.
+                cursor = cursor + 1
+                return
+            end if
         end if
+
         cursor = cursor + 1
         accept = .true.
     end function acceptSet
@@ -136,6 +182,18 @@ module parser
         cast = str
     end function strToStr
 
+    function stringToInt(str) result(cast)
+        character(len=*), intent(in) :: str
+        integer :: cast
+        integer :: ios
+   
+        read(str, *, iostat=ios) cast
+    
+        if (ios /= 0) then
+            cast = -1 
+        end if
+    end function stringToInt
+
 end module parser
 `;
 
@@ -150,13 +208,16 @@ end module parser
 * @returns
 */
 export const rule = (data) => {
-    console.log(data)
     return`
     function peg_${data.id}() result (res)
         ${data.returnTypes} :: res
         ${data.exprDeclarations.join('\n')}
         integer :: i
-
+        integer :: j
+        character(len=:), allocatable :: tmpAssertion
+        integer :: temp_delimiter
+        integer :: tempCounter
+    
         savePoint = cursor
         ${data.expr}
     end function peg_${data.id}
@@ -165,7 +226,10 @@ export const rule = (data) => {
 /**
  *
  * @param {{
-*  exprs: string[]
+*  exprs: string[];
+*  optionNumber: number;
+*  type: string;
+*  isStartingRule?: boolean
 * }} data
 * @returns
 */
@@ -180,9 +244,9 @@ export const election = (data) => `
                 ${expr}
                 exit
             `
-        )}
+        ).join('')}
         case default
-            call pegError()
+            ${data.isStartingRule ? 'call pegError()' : 'return'}
         end select
     end do
 `;
@@ -193,13 +257,18 @@ export const election = (data) => `
 *  exprs: string[]
 *  startingRule: boolean
 *  resultExpr: string
+*  type?: string
+*  positive: boolean
+*  negative: boolean
 * }} data
 * @returns
 */
 export const union = (data) => `
     ${data.exprs.join('\n')}
     ${data.startingRule ? 'if (.not. acceptEOF()) cycle' : ''}
-    ${data.resultExpr}
+    ${data.positive ? "if (.not. res) cycle" : ""}
+    ${data.negative ? "if (res) cycle" : ""}
+    ${data.type != 'group' ? `${data.resultExpr}` : ''}
 `;
 
 /**
@@ -208,15 +277,24 @@ export const union = (data) => `
 *  expr: string;
 *  destination: string
 *  quantifier?: string;
+*  number_1?: number
+*  number_2?: number
+*  type?: string
+*  delimiter_?: string
+*  from?: string
 * }} data
 * @returns
 */
 export const strExpr = (data) => {
+    
     if (!data.quantifier){
         return `
-                lexemeStart = cursor
-                if(.not. ${data.expr}) cycle
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? 'lexemeStart = cursor': ''}
+                if(.not. ${data.expr}) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
         `;
     }
     switch (data.quantifier) {
@@ -224,16 +302,17 @@ export const strExpr = (data) => {
             return `
                 lexemeStart = cursor
                 if (.not. ${data.expr}) then
-                    cursor = cursor -1
+                    cursor = cursor - 1
                     cycle
                 end if
                 do while (.not. cursor > len(input))
                     if (.not. ${data.expr}) then
                         cursor = cursor - 1
                         exit
-                    end if
+                    end if 
+
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case '*':
             return `
@@ -244,7 +323,8 @@ export const strExpr = (data) => {
                         exit
                     end if
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
+
             `;
         case '?':
             return `
@@ -252,15 +332,111 @@ export const strExpr = (data) => {
                 if (.not. ${data.expr}) then
                     cursor = cursor - 1
                 end if
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
-        default:
-            throw new Error(
-                `'${data.quantifier}' quantifier needs implementation`
-            );
+        case 'only-count':
+            return `
+                lexemeStart = cursor
+                j = 0
+                do while(cursor <= len(input))
+                    if(.not. ${data.expr}) then
+                        cursor = cursor - 1
+                        exit
+                    end if
+                    j = j + 1
+                end do
+                ${data.from == 'action' ? `tempCounter = ${data.number_1}` : ''}
+                if(j /= ${data.from != 'action' ? data.number_1 : 'tempCounter'}) cycle
+                ${data.destination} = consumeInput()
+            `
+        case 'min-max':
+            return `
+                lexemeStart = cursor
+                j = 0
+                do while (cursor <= len(input))
+                    if (.not. ${data.expr}) then
+                        cursor = cursor - 1
+                        exit
+                    end if 
+                    j = j + 1
+                end do
+                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
+            `
+        case 'delimiter-minMax':
+            return `
+                lexemeStart = cursor
+                j = 0
+                temp_delimiter = len(${data.delimiter_})
+                do while(cursor <= len(input))
+                    if(j < 1)then
+                        if(.not. ${data.expr})then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    else
+                        if(input(cursor:cursor + temp_delimiter - 1) == ${data.delimiter_}) then
+                            cursor = cursor + temp_delimiter
+                            if(${data.expr})then
+                                j = j + 1
+                                cycle
+                            else
+                                cursor = cursor - 2
+                                exit
+                            end if
+                        else
+                            exit
+                        end if
+                    end if
+                end do
+        
+                if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) then
+                    cycle
+                end if
+
+                ${data.destination} = consumeInput()
+            `
+        case 'delimiter-count':
+            return `
+                lexemeStart = cursor
+                j = 0
+                temp_delimiter = len(${data.delimiter_})
+                do while(cursor <= len(input))
+                    if(j < 1)then
+                        if(.not. ${data.expr})then
+                            cursor = cursor - 1
+                            exit
+                        end if
+                        j = j + 1
+                    else
+                        if(input(cursor:cursor + temp_delimiter - 1) == ${data.delimiter_}) then
+                            cursor = cursor + temp_delimiter
+                            if(${data.expr})then
+                                j = j + 1
+                                cycle
+                            else
+                                cursor = cursor - 2
+                                exit
+                            end if
+                        else
+                            exit
+                        end if
+                    end if
+                end do
+
+                if(.not. (j == ${data.number_1})) then
+                    cycle
+                end if
+
+                ${data.destination} = consumeInput()
+            `    
     }
 };
 
+export const strExprPositive = (data) => `if (.not. ${data.expr}) cycle`;
+
+export const strExprNegative = (data) => `if (${data.expr}) cycle`;
 
 /**
  *
@@ -309,6 +485,65 @@ export const action = (data) => {
     end function peg_${data.ruleId}_f${data.choice}
     `;
 };
+
+/**
+ *
+ * @param {{
+*  ruleId: string;
+*  choice: number
+*  signature: string[];
+*  returnType: string;
+*  paramDeclarations: string[];
+*  code: string;
+* }} data
+* @returns
+*/
+export const action_group = (data) => {
+    const signature = data.signature.join(', ');
+    return `
+    function peg_${data.ruleId}_f${data.choice}(${signature}) result(res)
+        ${data.paramDeclarations.join('\n')}
+        ${data.returnType} :: res
+        ${data.code}
+    end function peg_${data.ruleId}_f${data.choice}
+    `;
+}
+
+
+/**
+ * @jaguzaro
+ * @param {{
+ *  destination: string;
+ *  exprs: string[];
+ *  groupNumber: number;
+ *  action?: string[]; 
+ * }} data
+ */
+export const group = (data) => {
+    return `
+    lexemeStart = cursor
+    savePoint${data.groupNumber} = cursor
+    do i_${data.groupNumber} = 0, ${data.exprs.length}
+        select case(i_${data.groupNumber})
+        ${data.exprs.map(
+            (expr, i) => `
+            case(${i})
+                cursor = savePoint${data.groupNumber}
+                ${expr}
+                ${
+                data.action && data.action[i]
+                ? `! res = ${data.action[i].fnId}(${data.action[i].params})`: ''}
+                exit
+            `   
+        ).join('')}
+        case default
+            exit
+        end select
+    end do
+    ${data.destination} = consumeInput()
+    ${data.exprs.map((expr, i) => `${data.destination} = ${data.action[i].fnId}(${data.destination}`)}
+    `
+}
     
 
 

@@ -92,9 +92,9 @@ export class Options {
  */
 export class Union {
     /**
-     *
      * @param {Node[]} exprs
 	 * @param {Predicate=} action
+     * @param {string} type
      */
     constructor(exprs, action) {
         this.exprs = exprs;
@@ -198,6 +198,7 @@ export class Annotated {
      * @param {Node} expr
 	 * @param {(string|Node)=} qty
 	 * @param {boolean=} text
+     * @param {string} type
      */
     constructor(expr, qty, text) {
         this.expr = expr;
@@ -283,6 +284,29 @@ export class String {
      */
     accept(visitor) {
         return visitor.visitString(this);
+    }
+}
+    
+
+/**
+ * @implements {Node}
+ */
+export class Group {
+    /**
+     *
+     * @param {Union[]} exprs
+     */
+    constructor(exprs) {
+        this.exprs = exprs;
+    }
+
+    /**
+     * @template T
+     * @param {Visitor<T>} visitor
+     * @returns {T}
+     */
+    accept(visitor) {
+        return visitor.visitGroup(this);
     }
 }
     

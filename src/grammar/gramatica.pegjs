@@ -23,13 +23,14 @@ gramatica
   }
 
 globalCode
-  = "{" _before:$(. !"contains")* [ \t\n\r]* "contains" [ \t\n\r]* after:$[^}]* "}"{
+  = "{" _ before:$(. !"contains")* [ \t\n\r]* "contains" [ \t\n\r]* after:$[^}]* "}"{
     return after ? {before, after} : {before}
   }
 
 regla
   = _ id:identificador _ alias:(literales)? _ "=" _ expr:opciones (_ ";")? {
     ids.push(id);
+    expr.type = "main";
     return new n.Regla(id, expr, alias);
   }
 
@@ -55,13 +56,12 @@ union
     return new n.Union(exprs, action);
   }
 
-    
 parsingExpression
   = pluck 
-  / "!" assertion:(match/predicate){
+  / "!" assertion:(match){
     return new n.NegAssertion(assertion);
   }
-  / "&" assertion:(match/predicate){
+  / "&" assertion:(match){
     return new n.Assertion(assertion);
   }
   / "!." {
@@ -82,8 +82,8 @@ label
   }
 
 annotated
-  = text:"$"? _ expr:match _ qty:$([?+*]/conteo)? {
- 
+  = text:"$"? _ expr:match _ qty:([?+*]/conteo)? {
+    console.log(qty, 'qty')
     return new n.Annotated(expr, qty, text ? true : false);
   }
 
@@ -95,7 +95,10 @@ match
   / val:$literales isCase:"i"? {
     return new n.String(val.replace(/['"]/g, ''), isCase ? true : false);
   }
-  / "(" _ @opciones _ ")"
+  / "(" _ opt:opciones _ ")" {
+    opt.type = "group";
+    return new n.Group(opt.exprs)
+  }
   / exprs:clase isCase:"i"?{
     return new n.Clase(exprs, isCase ? true : false);
   }
@@ -104,14 +107,21 @@ match
   }
   
 
-conteo = "|" _ qty:(numero / identificador) _ "|" {console.log(qty); return text()}
+conteo = "|" _ qty:(numero / identificador / predicate) _ "|" {
+    if(! qty instanceof n.Predicate){
+      return text()
+    }else{
+      console.log(qty, 'enter here')
+      return qty
+    }
+  }
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "|"
         / "|" _ (numero / id:identificador)? _ "," _ opciones _ "|"
         / "|" _ (numero / id:identificador)? _ ".." _ (numero / id2:identificador)? _ "," _ opciones _ "|"
 
 predicate
-  = "{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {
-    return new n.Predicate(returnType, code, {})
+  = _ symbol:("&"/"!")? _"{" [ \t\n\r]* returnType:predicateReturnType code:$[^}]*  "}" {
+    return new n.Predicate(returnType, code, symbol, {})
   }
 
 predicateReturnType
