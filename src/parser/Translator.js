@@ -55,7 +55,7 @@ export default class FortranTranslator{
         node.rules.forEach((r)=>{
             r.expr.exprs.forEach((u)=>{
                 u.exprs.forEach((pE)=>{
-                    if(pE.labeledExpr.annotatedExpr.expr instanceof CST.Group){
+                    if(pE.labeledExpr?.annotatedExpr?.expr instanceof CST.Group){
                         decArray.push(`integer,private :: savePoint${gCounter++}`)
                     }
                 })
@@ -102,7 +102,7 @@ export default class FortranTranslator{
         let gCounter = 0;
         node.expr.exprs.forEach((u)=>{
             u.exprs.forEach((pE)=>{
-                if(pE.labeledExpr.annotatedExpr.expr instanceof CST.Group){
+                if(pE.labeledExpr?.annotatedExpr?.expr instanceof CST.Group){
                     decArray.push(`integer :: i_${gCounter++}`)
                 }
             })
@@ -177,7 +177,7 @@ export default class FortranTranslator{
         if(node.action && node.type != 'group') this.actions.push(node.action.accept(this));
         return Template.union({
             exprs: node.exprs.map((expr) =>{
-                if(expr.labeledExpr.annotatedExpr && node.type == 'group') expr.labeledExpr.annotatedExpr.type = 'group';
+                if(expr.labeledExpr?.annotatedExpr && node.type == 'group') expr.labeledExpr.annotatedExpr.type = 'group';
                 const traslation = expr.accept(this);
                 if(expr instanceof CST.Pluck && node.type != 'group') this.currentExpr++;
 
