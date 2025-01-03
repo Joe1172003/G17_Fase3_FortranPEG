@@ -30,6 +30,7 @@ globalCode
 regla
   = _ id:identificador _ alias:(literales)? _ "=" _ expr:opciones (_ ";")? {
     ids.push(id);
+    expr.type = "main";
     return new n.Regla(id, expr, alias);
   }
 
@@ -95,7 +96,10 @@ match
   / val:$literales isCase:"i"? {
     return new n.String(val.replace(/['"]/g, ''), isCase ? true : false);
   }
-  / "(" _ @opciones _ ")"
+  / "(" _ opt:opciones _ ")" {
+    opt.type = "group";
+    return new n.Group(opt.exprs)
+  }
   / exprs:clase isCase:"i"?{
     return new n.Clase(exprs, isCase ? true : false);
   }

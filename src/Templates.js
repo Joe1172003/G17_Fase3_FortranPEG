@@ -7,6 +7,7 @@
 *  startingRuleType: string;
 *  rules: string[];
 *  actions: string[];
+*  globalDeclarations: string[];
 * }} data
 * @returns {string}
 */
@@ -16,6 +17,7 @@ module parser
     implicit none
     character(len=:), allocatable, private :: input
     integer, private :: savePoint, lexemeStart, cursor
+    ${data.globalDeclarations.join('\n')}
 
     interface toStr
         module procedure intToStr
@@ -170,6 +172,18 @@ module parser
         cast = str
     end function strToStr
 
+    function stringToInt(str) result(cast)
+        character(len=*), intent(in) :: str
+        integer :: cast
+        integer :: ios
+   
+        read(str, *, iostat=ios) cast
+    
+        if (ios /= 0) then
+            cast = -1 
+        end if
+    end function stringToInt
+
 end module parser
 `;
 
@@ -200,7 +214,10 @@ export const rule = (data) => {
 /**
  *
  * @param {{
-*  exprs: string[]
+*  exprs: string[];
+*  optionNumber: number;
+*  type: string;
+*  isStartingRule?: boolean
 * }} data
 * @returns
 */
@@ -215,9 +232,9 @@ export const election = (data) => `
                 ${expr}
                 exit
             `
-        ).join("")}
+        ).join('')}
         case default
-            call pegError()
+            ${data.isStartingRule ? 'call pegError()' : 'return'}
         end select
     end do
 `;
@@ -228,13 +245,14 @@ export const election = (data) => `
 *  exprs: string[]
 *  startingRule: boolean
 *  resultExpr: string
+*  type?: string
 * }} data
 * @returns
 */
 export const union = (data) => `
     ${data.exprs.join('\n')}
     ${data.startingRule ? 'if (.not. acceptEOF()) cycle' : ''}
-    ${data.resultExpr}
+    ${data.type != 'group' ? `${data.resultExpr}` : ''}
 `;
 
 /**
@@ -245,30 +263,38 @@ export const union = (data) => `
 *  quantifier?: string;
 *  number_1?: number
 *  number_2?: number
+*  type?: string
 *  delimiter_?: string
 * }} data
 * @returns
 */
 export const strExpr = (data) => {
+    
     if (!data.quantifier){
         return `
-                lexemeStart = cursor
-                if(.not. ${data.expr}) cycle
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? 'lexemeStart = cursor': ''}
+                if(.not. ${data.expr}) then
+                    cursor = cursor - 1
+                    cycle
+                end if
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
         `;
     }
     switch (data.quantifier) {
         case '+':
             return `
                 lexemeStart = cursor
-                if (.not. ${data.expr}) cycle
+                if (.not. ${data.expr}) then
+                    cursor = cursor - 1
+                    cycle
+                end if
                 do while (.not. cursor > len(input))
                     if (.not. ${data.expr}) then
                         cursor = cursor - 1
                         exit
                     end if 
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case '*':
             return `
@@ -279,7 +305,7 @@ export const strExpr = (data) => {
                         exit
                     end if
                 end do
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case '?':
             return `
@@ -287,7 +313,7 @@ export const strExpr = (data) => {
                 if (.not. ${data.expr}) then
                     cursor = cursor - 1
                 end if
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
         case 'only-count':
             return `
@@ -315,7 +341,7 @@ export const strExpr = (data) => {
                     j = j + 1
                 end do
                 if(.not. (j >= ${data.number_1} .and. j <= ${data.number_2})) cycle
-                ${data.destination} = consumeInput()
+                ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `
         case 'delimiter-minMax':
             return `
@@ -434,6 +460,41 @@ export const action = (data) => {
     end function peg_${data.ruleId}_f${data.choice}
     `;
 };
+
+
+/**
+ * @jaguzaro
+ * @param {{
+ *  destination: string;
+ *  exprs: string[];
+ *  groupNumber: number;
+ *  action?: string[]; 
+ * }} data
+ */
+export const group = (data) => {
+    return `
+    lexemeStart = cursor
+    savePoint${data.groupNumber} = cursor
+    do i_${data.groupNumber} = 0, ${data.exprs.length}
+        select case(i_${data.groupNumber})
+        ${data.exprs.map(
+            (expr, i) => `
+            case(${i})
+                cursor = savePoint${data.groupNumber}
+                ${expr}
+                ${
+                data.action && data.action[i]
+                ? `res = ${data.action[i].fnId}(${data.action[i].params})`: ''}
+                exit
+            `   
+        ).join('')}
+        case default
+            exit
+        end select
+    end do
+    ${data.destination} = consumeInput()
+    `
+}
     
 
 
