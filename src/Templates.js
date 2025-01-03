@@ -172,6 +172,18 @@ module parser
         cast = str
     end function strToStr
 
+    function stringToInt(str) result(cast)
+        character(len=*), intent(in) :: str
+        integer :: cast
+        integer :: ios
+   
+        read(str, *, iostat=ios) cast
+    
+        if (ios /= 0) then
+            cast = -1 
+        end if
+    end function stringToInt
+
 end module parser
 `;
 

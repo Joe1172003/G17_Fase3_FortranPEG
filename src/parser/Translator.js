@@ -330,10 +330,10 @@ export default class FortranTranslator{
                             signature: Object.keys(expr.action.params),
                             returnType: expr.action.returnType,
                             paramDeclarations: Object.entries(expr.action.params).map(
-                                ([label, ruleId]) =>{
-                                    `${getReturnType(getExprId(ruleId, this.currentChoice),
+                                ([label, ruleId]) =>
+                                    `${getReturnType(getActionId(ruleId, this.currentChoice),
                                         this.actionReturnTypes)} :: ${label}`
-                                }
+                                
                             ),
                             code: expr.action.code
                         }));
