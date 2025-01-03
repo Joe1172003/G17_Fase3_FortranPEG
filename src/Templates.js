@@ -310,6 +310,7 @@ export const strExpr = (data) => {
                         cursor = cursor - 1
                         exit
                     end if 
+
                 end do
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
             `;
@@ -323,6 +324,7 @@ export const strExpr = (data) => {
                     end if
                 end do
                 ${data.type != 'group' ? `${data.destination} = consumeInput()`: ''}
+
             `;
         case '?':
             return `
